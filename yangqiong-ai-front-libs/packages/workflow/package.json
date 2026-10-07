@@ -2,7 +2,7 @@
   "name": "@yq/workflow",
   "version": "0.1.0",
   "description": "YangQiong AI 工作流编辑器组件库（编辑器框架 + 标准节点 + dev 调试场）",
-  "license": "Apache-2.0",
+  "license": "AGPL-3.0",
   "type": "module",
   "main": "./dist/yq-workflow.umd.cjs",
   "module": "./dist/yq-workflow.js",

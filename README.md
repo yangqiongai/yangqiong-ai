@@ -61,7 +61,7 @@ yangqiong-ai/
 ├── yangqiong-ai-platform/           # 平台业务能力层（认证/知识库/会话/集成/系统管理）
 ├── yangqiong-ai-server/             # 服务启动模块（Spring Boot 单体，端口 8082）
 ├── yangqiong-ai-front-community/    # 前端管理后台（React 18 + Ant Design，端口 3001）
-└── yangqiong-ai-front-libs/         # 前端组件层（Apache 2.0 独立开源）
+└── yangqiong-ai-front-libs/         # 前端组件层
 ```
 
 ## 🔧 环境要求
@@ -73,6 +73,42 @@ yangqiong-ai/
 可选依赖按需启用：MinIO（对象存储，未启用时相关功能自动禁用）、Qdrant（向量库，通过环境变量 `QDRANT_HOST` 指向实际主机）、Neo4j（图谱，默认关闭）、Redis（缓存，默认关闭）。
 
 ## 🚀 快速开始
+
+### 一键启动包（免安装，推荐体验）
+
+不想装环境？直接从 GitHub Release 下载对应平台的一键启动包，解压即用。包内已内置精简 JRE、MySQL、Redis、Qdrant、后端程序与前端页面，无需安装任何依赖：
+
+| 平台 | 下载文件 | 大小 |
+|---|---|---|
+| Windows | `yangqiong-ai-community-quickstart-win-x64.zip` | 约 265 MB |
+| Linux x86_64 | `yangqiong-ai-community-quickstart-linux-x86_64.tar.gz` | 约 280 MB |
+
+下载地址：<https://github.com/yangqiongai/yangqiong-ai/releases>
+
+**使用方法**
+
+- Windows：解压后双击 `start.bat`，浏览器自动打开 <http://localhost:8082>
+- Linux：解压后执行 `./start.sh`（无需 root），浏览器访问 <http://localhost:8082>
+- 默认账号：`admin / 123456`
+- 停止服务：Windows 双击 `stop.bat`；Linux 执行 `./stop.sh`
+
+首次启动会自动完成密钥生成、MySQL 初始化建库与 Flyway 表结构迁移，耗时较长属正常现象，后续启动明显加快。
+
+**内置服务与端口**（全部仅监听本机，使用非官方端口避免冲突）
+
+| 服务 | 地址 | 说明 |
+|---|---|---|
+| 应用入口 | <http://localhost:8082> | 前端 + API 同源 |
+| MySQL | `127.0.0.1:23306` | 免安装，`mysql/data/` 为数据库文件 |
+| Redis | `127.0.0.1:16379` | 会话 / 工作流状态缓存 |
+| Qdrant | `127.0.0.1:16333/16334` | 向量数据库 |
+| SeaweedFS | 可选捆绑 | S3 兼容对象存储，默认不捆绑，文档上传到本地目录 `data/files` |
+
+**目录说明**：`jre/` 内置精简 Java 运行环境；`app/` 后端程序；`web/` 前端页面；`conf/` 外置配置 `application-quickstart.yml`；`logs/` 运行日志；`cache/djl/` RAG 向量模型缓存（首次使用知识库自动联网下载约 400 MB，之后可离线使用）。
+
+**升级与卸载**：升级前停止服务并备份 `mysql/data/`、`data/files/`、`qdrant/storage/`、`redis/data/`、`cache/djl/`、`conf/`、`run/`，解压新包后覆盖回对应位置再启动；卸载直接删除整个目录即可，无注册表与系统服务残留。
+
+> 提示：如遇端口占用、防火墙提示、MySQL 初始化失败等常见问题，详见包内 `README.txt`。
 
 ### 后端
 

@@ -2,10 +2,10 @@
 
 Thank you for your interest in contributing to YangQiong AI ("the Project"), maintained by YangQiong ("the Maintainer").
 
-This Contributor License Agreement ("Agreement") clarifies the intellectual-property rights granted with any Contribution from any person or entity, and applies to all open-source repositories of the Project, including the community repositories licensed under AGPL-3.0 (yangqiong-ai, yangqiong-ai-front-community) and the component/engine repositories licensed under Apache-2.0 (yangqiong-ai-front-libs, yangqiong-agent-harness). The Maintainer needs this to:
+This Contributor License Agreement ("Agreement") clarifies the intellectual-property rights granted with any Contribution from any person or entity, and applies to all open-source repositories of the Project, including the repositories licensed under AGPL-3.0 (yangqiong-ai, yangqiong-ai-front-community, yangqiong-ai-front-libs) and other component/engine repositories that may carry their own license terms. The Maintainer needs this to:
 
 - keep the legal status of the Project clean, and
-- preserve the option to release the Project (or parts of it) under another license in the future — for example, a commercial license alongside the AGPL-3.0 community release and the Apache-2.0 component releases.
+- preserve the option to release the Project (or parts of it) under another license in the future — for example, a commercial license alongside the AGPL-3.0 open-source releases.
 
 By submitting a Contribution to the Project (e.g. via a pull request, patch, issue attachment, or any other channel), you accept and agree to the following terms for your present and future Contributions submitted to the Project. If you do not agree, please do not contribute.
 
