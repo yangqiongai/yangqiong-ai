@@ -1,0 +1,13 @@
+ai:
+  conversation:
+    enabled: true
+    quota:
+      max-active-sessions: 10
+      max-total-sessions: 100
+      daily-token-limit: 100000
+      session-token-limit: 8000
+    cleanup:
+      enabled: true
+      inactive-days: 90
+      delete-messages: false
+      cron: 0 0 2 * * ?

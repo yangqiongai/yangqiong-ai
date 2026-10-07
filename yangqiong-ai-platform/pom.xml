@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.yangqiongai.ai</groupId>
+        <artifactId>yangqiong-ai-framework</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>yangqiong-ai-platform</artifactId>
+    <packaging>pom</packaging>
+    <name>yangqiong-ai-platform</name>
+    <description>AI 平台业务能力层</description>
+
+    <licenses>
+        <license>
+            <name>GNU Affero General Public License v3.0</name>
+            <url>https://www.gnu.org/licenses/agpl-3.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <properties>
+        <jjwt.version>0.12.6</jjwt.version>
+    </properties>
+
+    <modules>
+        <module>yangqiong-ai-platform-bss</module>
+        <module>yangqiong-ai-platform-api</module>
+        <module>yangqiong-ai-platform-knowledge</module>
+        <module>yangqiong-ai-platform-conversation</module>
+        <module>yangqiong-ai-platform-connector</module>
+        <module>yangqiong-ai-platform-ecosystem</module>
+        <module>yangqiong-ai-platform-auth</module>
+        <module>yangqiong-ai-platform-system</module>
+        <module>yangqiong-ai-platform-starter</module>
+        <module>yangqiong-ai-bom</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.yangqiongai.ai</groupId>
+                <artifactId>yangqiong-ai-platform-bss</artifactId>
+                <version>${ai.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.yangqiongai.ai</groupId>
+                <artifactId>yangqiong-ai-platform-api</artifactId>
+                <version>${ai.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.yangqiongai.ai</groupId>
+                <artifactId>yangqiong-ai-platform-knowledge</artifactId>
+                <version>${ai.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.yangqiongai.ai</groupId>
+                <artifactId>yangqiong-ai-platform-conversation</artifactId>
+                <version>${ai.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.yangqiongai.ai</groupId>
+                <artifactId>yangqiong-ai-platform-starter</artifactId>
+                <version>${ai.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.yangqiongai.ai</groupId>
+                <artifactId>yangqiong-ai-platform-server</artifactId>
+                <version>${ai.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.yangqiongai.ai</groupId>
+                <artifactId>yangqiong-ai-platform-connector</artifactId>
+                <version>${ai.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.yangqiongai.ai</groupId>
+                <artifactId>yangqiong-ai-platform-ecosystem</artifactId>
+                <version>${ai.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.yangqiongai.ai</groupId>
+                <artifactId>yangqiong-ai-platform-auth</artifactId>
+                <version>${ai.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.yangqiongai.ai</groupId>
+                <artifactId>yangqiong-ai-platform-system</artifactId>
+                <version>${ai.version}</version>
+            </dependency>
+
+            <!-- JWT 支持 -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <version>4.6</version>
+                <configuration>
+                    <header>${maven.multiModuleProjectDirectory}/LICENSE-HEADER</header>
+                    <encoding>UTF-8</encoding>
+                    <includes>
+                        <include>src/**/*.java</include>
+                    </includes>
+                    <skipExistingHeaders>true</skipExistingHeaders>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>ban-enterprise-dependencies</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>com.yangqiongai.ai:*-enterprise</exclude>
+                                        <exclude>*:yangqiong-ai-*-enterprise</exclude>
+                                    </excludes>
+                                    <message>请改用社区侧 SPI 扩展点</message>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

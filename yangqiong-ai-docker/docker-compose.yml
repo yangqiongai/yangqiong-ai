@@ -1,0 +1,99 @@
+# 泱穹智能体平台社区版一键编排：MySQL + Redis + Qdrant + 后端 + 前端
+# 用法：cd yangqiong-ai-docker && docker compose up -d   （或使用 build.sh / build.ps1）
+# 访问：http://localhost:3001 ，种子账号 admin/123456
+# 说明：
+#   - Qdrant（向量库）已内置并默认启用；Qdrant 官方镜像 gRPC 端口为 6334（应用 QDRANT_PORT 即指向该端口）
+#   - 文件存储默认 local（落盘到 backend-data 卷）；对象存储（MinIO/S3 兼容）与 Docling 文档解析
+#     为可选组件，按需启用，接入方式见仓库根 README「Docker 部署」章节
+#   - 生产部署必须覆盖默认密码与密钥：MYSQL_ROOT_PASSWORD /
+#     AUTH_JWT_SECRET / AI_SECRET_MASTER_KEY / AUTH_RSA_PRIVATE_KEY
+name: yangqiong-ai
+
+services:
+  mysql:
+    image: mysql:5.7
+    container_name: yangqiong-ai-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-yangqiong-ai-root}
+      MYSQL_DATABASE: yangqiong-ai-opensource
+      TZ: Asia/Shanghai
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: yangqiong-ai-redis
+    volumes:
+      - redis-data:/data
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: yangqiong-ai-qdrant
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+
+  backend:
+    image: ${YQ_IMAGE_PREFIX:-yangqiongai}/yangqiong-ai-backend:${YQ_IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: yangqiong-ai-docker/backend/Dockerfile
+    container_name: yangqiong-ai-backend
+    environment:
+      TZ: Asia/Shanghai
+      JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx1024m}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/yangqiong-ai-opensource?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-yangqiong-ai-root}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # 文件存储：默认 local（落盘 backend-data 卷）；对象存储接入方式见 README
+      AI_STORAGE_TYPE: local
+      # 向量库（Qdrant 官方镜像 gRPC 端口 6334）
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6334"
+      # Docling 文档解析为可选组件：留空降级 Tika 本地解析，启用方式见 README
+      AI_RAG_DOCLING_URL: ""
+      # 生产环境必须覆盖以下默认值（也可用 env_file 注入）
+      # AUTH_JWT_SECRET: <替换为随机长字符串>
+      # AI_SECRET_MASTER_KEY: <凭据加密主密钥>
+      # AUTH_RSA_PRIVATE_KEY: <RSA 私钥，与前端公钥配对>
+    volumes:
+      - backend-logs:/app/logs
+      - backend-data:/app/data
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+
+  frontend:
+    image: ${YQ_IMAGE_PREFIX:-yangqiongai}/yangqiong-ai-frontend:${YQ_IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: yangqiong-ai-docker/frontend/Dockerfile
+    container_name: yangqiong-ai-frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql-data:
+  redis-data:
+  qdrant-data:
+  backend-logs:
+  backend-data:

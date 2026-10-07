@@ -1,0 +1,16 @@
+ai:
+  trust:
+    enabled: true
+    credential:
+      # 凭证鉴权过滤器默认关闭,上线后开启
+      enabled: false
+      include-paths: /open/v1/**,/mcp/**,/a2a/**
+    identity:
+      # 身份凭证签名主密钥,生产环境必须外部化(至少32字节)
+      master-key: ${AI_TRUST_IDENTITY_MASTER_KEY:}
+      credential-ttl-seconds: 300
+      default-rotate-days: 90
+    action-audit:
+      # 动作审计基础日志,开启后工具调用守卫落ai_agent_action_log;社区版默认关闭(表已收回),企业版显式开启
+      enabled: false
+      summary-max-chars: 200

@@ -1,0 +1,49 @@
+ai:
+  agent:
+    local:
+      # 本地模式处理器最大迭代次数
+      max-iters: 25
+      # 默认工作区路径（不配置时使用JVM工作目录）
+      workspace-path: ""
+      # 用户工作区（智能工作台：每用户独立工作目录，运行期请求级注入引擎沙箱根）
+      workspace:
+        # 是否启用用户工作区
+        enabled: true
+        # 允许登记目录的白名单根（空表示不限）
+        roots: []
+        # 每用户工作区数量上限
+        max-per-user: 20
+        # 审批实现方式：framework框架审批门阻塞式（默认）/ engine引擎确认暂停重放式
+        approval-engine: engine
+        # 二进制文件生成能力（Excel一期：真实xlsx生成/编辑/读回，内容与编码分离）
+        generate:
+          # 是否启用Excel工具
+          enabled: true
+          # 单文件单元格总数上限
+          max-cells: 100000
+          # 单文件大小上限（字节）
+          max-file-size: 5242880
+          # sheet数量上限
+          max-sheets: 20
+      execution:
+        docker:
+          enabled: false
+          docker-host: unix:///var/run/docker.sock
+          default-image: ubuntu:22.04
+          network: none
+          memory-limit: 512m
+          cpu-quota: 100000
+          timeout-seconds: 120
+        ssh:
+          enabled: false
+          hosts: []
+      browser:
+        enabled: false
+        driver-type: chrome
+        headless: true
+        screenshot-dir: ${java.io.tmpdir}/agent-screenshots
+        page-load-timeout-seconds: 30
+        implicit-wait-seconds: 10
+      scheduler:
+        enabled: true
+        auto-start: true

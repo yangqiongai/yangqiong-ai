@@ -1,0 +1,4 @@
+com.yangqiongai.ai.agent.data.AiAgentDataAutoConfiguration
+com.yangqiongai.ai.agent.data.skill.AiAgentSkillDataAutoConfiguration
+com.yangqiongai.ai.agent.data.trace.AgentTraceAutoConfiguration
+com.yangqiongai.ai.agent.data.trace.AgentContextSnapshotAutoConfiguration

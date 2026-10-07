@@ -1,0 +1,21 @@
+ai:
+  agent:
+    registry:
+      enabled: true                # 是否启用Agent注册中心
+      approval-timeout-minutes: 30 # 发布审批超时时间(分钟)
+      gray-cache-ttl-seconds: 30   # 灰度解析缓存过期时间(秒)
+      gray-cache-max-size: 500     # 灰度解析缓存最大条目数
+      publish-lock-enabled: true   # 是否启用发布串行锁
+      # 模型分级路由(复杂度信号分流SLM降级池，默认关闭=全部走主力)
+      model-route:
+        enabled: false
+        # 轻量降级池模型编码(空=降级池未配置，全部走主力)
+        slm-model-code:
+        # 历史步数复杂度阈值(信号>=阈值走主力)
+        history-steps-threshold: 8
+        # 工具数复杂度阈值(信号>=阈值走主力)
+        tool-count-threshold: 3
+        # 输入长度复杂度阈值(信号>=阈值走主力)
+        input-length-threshold: 4000
+        # SLM失败率熔断百分比(0-100，达到即回退主力)
+        health-circuit-breaker-percent: 30

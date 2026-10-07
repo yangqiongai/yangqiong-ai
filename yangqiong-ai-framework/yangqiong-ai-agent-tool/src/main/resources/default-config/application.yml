@@ -1,0 +1,18 @@
+ai:
+  websearch-search:
+    # Web搜索配置（组件在本模块，配置归属此处；注意键名是websearch-search，与代码@Value/@ConditionalOnProperty精确匹配）
+    enabled: true
+    default-source: tavily
+    duckduckgo:
+      enabled: false
+      url: ""
+      connect-timeout: 1
+      read-timeout: 5
+    tavily:
+      enabled: true
+      url: ""
+      controller-key: "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"
+      connect-timeout: 1
+      read-timeout: 5
+  dynamic-skill:
+    enabled: true

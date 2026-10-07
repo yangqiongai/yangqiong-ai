@@ -1,0 +1,25 @@
+ai:
+  connector:
+    # 连接器模块总开关（默认开启：社区版含数据库连接器，企业版叠加企微/飞书/钉钉）
+    enabled: true
+    # 实例工具装配缓存TTL（毫秒）
+    tool-cache-ms: 60000
+    # 入站消息异步处理线程数
+    gateway:
+      async-workers: 4
+    # 数据库连接器
+    database:
+      # 查询默认行数截断
+      max-rows: 200
+      # 执行超时（秒）
+      timeout-seconds: 10
+    # 文档解析连接器
+    docparser:
+      # 扫描件OCR兜底（需存在OcrEngine实现）
+      ocr-enabled: true
+      # 分块尺寸（字符）
+      chunk-size: 500
+      # 分块重叠（字符）
+      chunk-overlap: 50
+      # 最大文件大小（MB）
+      max-file-size-mb: 20

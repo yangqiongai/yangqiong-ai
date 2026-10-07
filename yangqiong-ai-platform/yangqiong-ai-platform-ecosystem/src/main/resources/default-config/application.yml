@@ -1,0 +1,16 @@
+ai:
+  ecosystem:
+    enabled: true
+    mcp:
+      # MCP服务出口默认关闭,开启前先在暴露白名单中配置可出口资产
+      enabled: false
+      server-name: yangqiong-ai-mcp
+      server-version: 1.0.0
+      endpoint: /mcp
+      tool-call-timeout-millis: 30000
+    a2a:
+      # A2A出口默认关闭,开启后注册中心已启用Agent自动生成规范卡
+      enabled: false
+      protocol-version: "1.0"
+      card-signature-enabled: true
+      base-url: http://localhost:8082

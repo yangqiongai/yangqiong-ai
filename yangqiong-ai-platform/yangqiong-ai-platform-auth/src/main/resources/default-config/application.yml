@@ -1,0 +1,8 @@
+ai:
+  auth:
+    # 认证模块开关（本地登录与 JWT；SSO/OIDC/LDAP 由商业模块 ai.auth.sso 提供）
+    enabled: false
+    jwt:
+      # 生产环境必须通过环境变量注入，长度至少32字节
+      secret: ${AUTH_JWT_SECRET:}
+      expiration-ms: 86400000

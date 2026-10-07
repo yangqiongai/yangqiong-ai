@@ -1,0 +1,17 @@
+# MCP模块默认配置
+ai:
+  mcp:
+    # 是否启用MCP功能
+    enabled: true
+    # MCP初始化连接超时时间（秒）
+    init-timeout-seconds: 5
+    # MCP工具调用超时时间（秒）
+    tool-call-timeout-seconds: 10
+    # 连续失败次数阈值，超过后自动下线
+    max-consecutive-failures: 3
+    # 连续空结果次数阈值，超过后自动下线
+    # 部分MCP工具因环境问题返回空结果而非错误（如baidu_search因Playwright未安装返回[]），
+    # 需要单独追踪连续空结果次数，达到阈值后触发下线
+    max-consecutive-empty-results: 5
+    # 健康检查间隔（秒），同时用于自动上线恢复服务的检查周期
+    health-check-interval-seconds: 300

@@ -1,0 +1,30 @@
+server:
+  port: 8082
+
+spring:
+  config:
+    import: "optional:configserver:"
+  application:
+    name: ai-server
+  datasource:
+    url: jdbc:mysql://localhost:3308/yangqiong-ai?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
+    driverClassName: com.mysql.cj.jdbc.Driver
+
+# Flyway（商业版迁移脚本通过spring.flyway.locations追加db/enterprise目录实现）
+spring.flyway:
+  enabled: true
+  locations:
+    - classpath:db/migration
+  baseline-on-migrate: true
+
+# AI 作用域配置
+ai:
+  scope:
+    enabled: true
+    default-scope-id: default
+    header-name: X-Scope-Id
+    admins:
+      - admin
+

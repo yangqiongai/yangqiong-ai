@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.yangqiongai.ai</groupId>
+        <artifactId>yangqiong-ai-framework</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>yangqiong-ai-agent-data</artifactId>
+    <name>yangqiong-ai-agent-data</name>
+    <description>AI Agent 框架运行时与技能数据层（聚合模块）</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.yangqiongai.ai</groupId>
+            <artifactId>yangqiong-ai-agent-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yangqiongai.ai</groupId>
+            <artifactId>yangqiong-ai-agent-runtime</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yangqiongai.ai</groupId>
+            <artifactId>yangqiong-ai-agent-tool</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yangqiongai.ai</groupId>
+            <artifactId>yangqiong-ai-agent-mcp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yangqiongai.ai</groupId>
+            <artifactId>yangqiong-ai-agent-scheduler</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yangqiongai.ai</groupId>
+            <artifactId>yangqiong-ai-agent-local</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yangqiongai.ai</groupId>
+            <artifactId>yangqiong-ai-agent-skill</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yangqiongai.ai</groupId>
+            <artifactId>yangqiong-ai-evaluation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yangqiongai.ai</groupId>
+            <artifactId>yangqiong-ai-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-annotations-jakarta</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

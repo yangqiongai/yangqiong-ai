@@ -1,0 +1,49 @@
+### Java ###
+target/
+*.class
+*.jar
+!**/src/**/target/
+*.log
+hs_err_pid*
+replay_pid*
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### Eclipse / STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### VS Code ###
+.vscode/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### Frontend ###
+node_modules/
+dist/
+*.tsbuildinfo
+.eslintcache
+pnpm-debug.log*
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+### 其他 ###
+/.*
+!.gitignore
+!.dockerignore

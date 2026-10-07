@@ -1,0 +1,71 @@
+ai:
+  agent:
+    enabled: true
+    compaction:
+      # 压缩触发消息数，会话消息达到此值时触发压缩
+      trigger-messages: 40
+      # 压缩后保留的最近消息数
+      keep-messages: 12
+    tool-eviction:
+      # 工具结果驱逐阈值（字符数），超过此值的结果被保存到文件并替换为预览
+      # SDK 默认值为 80000（约 20K tokens），过低的阈值会导致 webSearch 等工具结果
+      # 被频繁驱逐，LLM 看不到完整内容而重复搜索
+      max-result-chars: 80000
+      preview-chars: 2000
+    default-tool-choice: auto
+    permission:
+      enabled: true
+      default-mode: DEFAULT
+    shutdown:
+      timeout-seconds: 30
+    tracing:
+      enabled: true
+      jsonl:
+        enabled: true
+        path: ./logs/agent-traces
+    trace-middleware:
+      enabled: true
+    skill-filter:
+      mode: all
+      skills: []
+    skill:
+      load-on-demand: true
+      hook-inject: true
+      filter-overlay: true
+      dynamic-rebuild: true
+      auto-learn:
+        # 是否启用自进化技能学习（任务完成后自动生成技能草稿）
+        enabled: false
+        # 触发自动学习的最小输入文本长度
+        min-input-length: 50
+    tool-loading:
+      # 工具下发模式：FULL全量下发 / PROGRESSIVE渐进加载（目录注入提示词+load_tool元工具按需启用）
+      mode: PROGRESSIVE
+      # 渐进模式下常驻工具名单（逗号分隔），这些工具始终全量下发不进延迟池；
+      # 技能工具常驻以与技能摘要注入配套，避免"load_tool启用load_skill再加载技能"的两跳调用
+      always-on-tools: load_skill,read_skill_resource
+    subagent:
+      generation:
+        enabled: true
+        model-code: ""
+    orchestration:
+      dynamic:
+        # 编排模式动态决策（请求未指定模式时由LLM决策）
+        decision:
+          enabled: true
+          model-code: ""
+        # 子代理动态生成（autoGenerate=true时由LLM生成子代理声明）
+        generation:
+          enabled: true
+          max-subagents: 5
+          model-code: ""
+    task:
+      persistence:
+        enabled: true
+      step-recording:
+        enabled: true
+        sync-enabled: true
+        stream-enabled: true
+    direct-llm:
+      # RAG 上下文最大字符数，超过时截断
+      max-rag-context-chars: 8000

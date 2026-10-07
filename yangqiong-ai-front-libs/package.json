@@ -1,0 +1,17 @@
+{
+  "name": "yangqiong-ai-front-libs",
+  "private": true,
+  "version": "0.1.0",
+  "description": "YangQiong AI 前端组件层 Monorepo（Apache 2.0 整仓开源）",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "pnpm --recursive build",
+    "dev": "pnpm --filter @yq/workflow dev",
+    "type-check": "pnpm --recursive type-check"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

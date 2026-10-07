@@ -1,0 +1,37 @@
+泱穹智能体平台（YangQiong Agent Platform）
+Copyright (C) 2026 yangqiong
+
+本软件采用双许可（Dual Licensing）模式发布：
+- GNU Affero General Public License v3.0（AGPL-3.0-only），详见 LICENSE 文件
+- 商业许可（Commercial License），获取商业授权请通过官网许可页或联系项目方
+
+本产品包含以下第三方组件的二进制或源代码，其版权归各自所有者所有，并按各自的许可协议使用。
+以下为主要组件清单，完整依赖以各模块 pom.xml / package.json 及分发物内置清单为准：
+
+后端（Java）：
+- Spring Boot / Spring Framework / Spring Security / Spring Data（Apache-2.0）
+- MyBatis-Plus（Apache-2.0）
+- Hutool（MulanPSL-2.0）
+- JJWT（Apache-2.0）
+- Knife4j / Swagger（Apache-2.0）
+- Apache POI、poi-tl（Apache-2.0）
+- OpenTelemetry Java（Apache-2.0）
+- Micrometer（Apache-2.0）
+- Flyway（Apache-2.0）
+- MySQL Connector/J（GPL-2.0-with-classpath-exception）
+- Neo4j Java Driver（Apache-2.0）
+- Qdrant Java Client（Apache-2.0）
+- DJL（Deep Java Library）（Apache-2.0）
+- jtokkit（Apache-2.0）
+- JGraphT（EPL-2.0 / LGPL-2.1）
+- HanLP（Apache-2.0）
+- MinIO Java SDK（Apache-2.0）
+- fastjson（Apache-2.0）
+- MCP Java SDK、A2A Java SDK（Apache-2.0）
+- JUnit 5（EPL-2.0）、Mockito（MIT）、AssertJ（Apache-2.0）、Testcontainers（Apache-2.0）、ArchUnit（Apache-2.0）
+
+前端（TypeScript / React）：
+- React（MIT）
+- Ant Design（MIT）
+- Vite（MIT）
+- TypeScript（Apache-2.0）

@@ -1,0 +1,7 @@
+ai:
+  agent:
+    open:
+      capability:
+        enabled: true
+        dedup-ttl-seconds: 86400
+        data-context-default-ttl-seconds: 3600

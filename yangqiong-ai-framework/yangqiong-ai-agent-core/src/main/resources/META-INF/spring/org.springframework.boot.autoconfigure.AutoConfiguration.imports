@@ -1,0 +1,2 @@
+com.yangqiongai.ai.agent.core.configuration.AgentCoreAutoConfiguration
+com.yangqiongai.ai.agent.core.configuration.PendingResumeStoreAutoConfiguration

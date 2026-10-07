@@ -1,0 +1,59 @@
+ai:
+  agent:
+    runtime:
+      # 运行时提供者
+      provider: harness
+    tool-loading:
+      # 工具下发模式：FULL 全量下发 / PROGRESSIVE 渐进加载（常驻+目录注入+按需启用）
+      mode: FULL
+      # 渐进模式常驻工具名单（逗号分隔，空则全部工具进延迟池，仅靠目录+load_tool）
+      always-on-tools: ""
+    harness:
+      # 共享存储模式：jdbc=多节点共享存储（检查点/审批/运行记录/运行锁持久化，配合node-id实现跨节点暂停恢复），不配置为单机内存模式
+      distributed-store: none
+      # 本节点唯一标识（distributed-store=jdbc时多节点部署必配，留空默认取主机名）
+      node-id:
+      model:
+        # 是否启用harness内置模型连接
+        enabled: false
+        # 提供商：openai（兼容OpenAI协议）、dashscope（通义千问兼容模式）、ollama（本地模型）
+        provider: openai
+        # API密钥（生产环境通过环境变量或配置中心注入，不建议明文写入）
+        api-key: ${OPENAI_API_KEY:}
+        # API基础地址
+        base-url: https://api.openai.com/v1
+        # 默认模型名称
+        model-name: gpt-4o-mini
+        # 默认温度
+        temperature: 0.7
+        # 默认最大Token数
+        max-tokens: 4096
+        # 请求超时（秒）
+        timeout-seconds: 60
+    orchestration:
+      # 子代理声明动态生成开关
+      dynamic:
+        generation:
+          enabled: true
+          # 最大子代理数
+          max-subagents: 5
+          # 声明生成模型编码（为空时走默认模型）
+          model-code:
+      # 自动编排开关
+      auto:
+        enabled: true
+      subagent:
+        # 最大嵌套深度
+        max-depth: 3
+        # 危险工具黑名单（逗号分隔）
+        dangerous-tools: shell,write_file,memory_write
+        # 是否允许子代理递归编排
+        allow-recursive-orchestration: true
+        # 事件传播策略：NONE/SUMMARY_ONLY/FULL
+        event-emit-policy: SUMMARY_ONLY
+      parallel:
+        # 并行容错策略：CONTINUE_ON_FAILURE/FAIL_FAST
+        failure-policy: CONTINUE_ON_FAILURE
+      sequential:
+        # 顺序容错策略：FAIL_FAST/CONTINUE_ON_FAILURE
+        failure-policy: FAIL_FAST

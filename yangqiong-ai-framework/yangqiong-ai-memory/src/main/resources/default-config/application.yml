@@ -1,0 +1,48 @@
+ai:
+  # 记忆能力配置（ai.memory.* 命名空间，兼容旧 ai.conversation.* 别名）
+  memory:
+    # 会话状态 Redis 二级缓存（Redis 就绪时跨节点共享，进程重启不丢）
+    session:
+      cache:
+        redis:
+          enabled: true
+          ttl-minutes: 120
+    # 长期记忆 LLM 工具开关（启用后 LLM 可主动记忆/检索）
+    long-term:
+      tool-enabled: true
+      # 检索长期记忆的 Token 预算上限
+      retrieve-max-tokens: 500
+    # 跨会话记忆合并
+    cross-session:
+      model-code: default
+      max-content-chars: 2000
+    # 摘要生成
+    summary:
+      enabled: true
+      model-code: default
+      trigger-count: 12
+    # 历史裁剪策略（time-order | importance）
+    trim:
+      strategy: time-order
+    # Token 估算器（fast | precise）
+    token:
+      estimator: fast
+    # 知识图谱配置
+    graph:
+      # 图谱检索开关
+      retrieval:
+        enabled: true
+        # 单次查询最大实体数
+        max-entities: 3
+        # 图谱检索跳数（1=直接关系，2=二跳关系）
+        hops: 1
+      # 实体识别器配置（用于图谱检索时从查询文本中提取实体候选）
+      entity-recognizer:
+        # 识别器类型：token=基于分词（默认，无LLM开销）/ llm=基于LLM命名实体识别（召回率高但有调用开销）
+        type: token
+        # LLM识别器专属配置（type=llm 时生效）
+        llm:
+          # 实体识别使用的模型代码（默认复用图谱模型）
+          model-code: ${ai.memory.graph.model-code:defaultAgent}
+          # 单次识别超时（毫秒）
+          timeout-ms: 3000

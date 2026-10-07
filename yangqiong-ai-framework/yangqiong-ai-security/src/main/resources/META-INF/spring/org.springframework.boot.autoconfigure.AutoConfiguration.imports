@@ -1,0 +1,2 @@
+com.yangqiongai.ai.security.SecurityAutoConfiguration
+com.yangqiongai.ai.security.config.GuardrailAutoConfiguration

@@ -1,0 +1,199 @@
+/*
+ * Copyright (C) 2026 yangqiong
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, version 3 of the License
+ * only ("AGPL-3.0-only") and not any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.yangqiongai.ai.agent.data.skill.entity;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.yangqiongai.ai.common.entity.ScopeEntity;
+
+import java.time.LocalDateTime;
+
+/**
+ * 技能生成草稿
+ * @author yangqiong
+ */
+@TableName("ai_agent_skill_gen_draft")
+public class SkillGenDraftEntity extends ScopeEntity {
+
+    @TableId(type = IdType.ASSIGN_ID)
+    private Long id;
+
+    /**
+     * 草稿ID
+     */
+    private String draftId;
+
+    /**
+     * 技能名称
+     */
+    private String skillName;
+
+    /**
+     * 技能描述（存储LLM提取的规范JSON）
+     */
+    private String skillDescription;
+
+    /**
+     * 技能Markdown内容
+     */
+    private String skillContent;
+
+    /**
+     * 绑定工具列表JSON
+     */
+    private String boundTools;
+
+    /**
+     * 生成状态：DRAFT_READY/CONFIRMED/DISCARDED
+     */
+    private String generateStatus;
+
+    /**
+     * 恢复令牌
+     */
+    private String resumeToken;
+
+    /**
+     * 恢复令牌哈希
+     */
+    private String resumeTokenHash;
+
+    /**
+     * 恢复令牌过期时间
+     */
+    private LocalDateTime resumeTokenExpireTime;
+
+    /**
+     * 澄清问题
+     */
+    private String clarificationQuestion;
+
+    /**
+     * 澄清答案
+     */
+    private String clarificationAnswer;
+
+    /**
+     * 备注
+     */
+    private String remark;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getDraftId() {
+        return draftId;
+    }
+
+    public void setDraftId(String draftId) {
+        this.draftId = draftId;
+    }
+
+    public String getSkillName() {
+        return skillName;
+    }
+
+    public void setSkillName(String skillName) {
+        this.skillName = skillName;
+    }
+
+    public String getSkillDescription() {
+        return skillDescription;
+    }
+
+    public void setSkillDescription(String skillDescription) {
+        this.skillDescription = skillDescription;
+    }
+
+    public String getSkillContent() {
+        return skillContent;
+    }
+
+    public void setSkillContent(String skillContent) {
+        this.skillContent = skillContent;
+    }
+
+    public String getBoundTools() {
+        return boundTools;
+    }
+
+    public void setBoundTools(String boundTools) {
+        this.boundTools = boundTools;
+    }
+
+    public String getGenerateStatus() {
+        return generateStatus;
+    }
+
+    public void setGenerateStatus(String generateStatus) {
+        this.generateStatus = generateStatus;
+    }
+
+    public String getResumeToken() {
+        return resumeToken;
+    }
+
+    public void setResumeToken(String resumeToken) {
+        this.resumeToken = resumeToken;
+    }
+
+    public String getResumeTokenHash() {
+        return resumeTokenHash;
+    }
+
+    public void setResumeTokenHash(String resumeTokenHash) {
+        this.resumeTokenHash = resumeTokenHash;
+    }
+
+    public LocalDateTime getResumeTokenExpireTime() {
+        return resumeTokenExpireTime;
+    }
+
+    public void setResumeTokenExpireTime(LocalDateTime resumeTokenExpireTime) {
+        this.resumeTokenExpireTime = resumeTokenExpireTime;
+    }
+
+    public String getClarificationQuestion() {
+        return clarificationQuestion;
+    }
+
+    public void setClarificationQuestion(String clarificationQuestion) {
+        this.clarificationQuestion = clarificationQuestion;
+    }
+
+    public String getClarificationAnswer() {
+        return clarificationAnswer;
+    }
+
+    public void setClarificationAnswer(String clarificationAnswer) {
+        this.clarificationAnswer = clarificationAnswer;
+    }
+
+    public String getRemark() {
+        return remark;
+    }
+
+    public void setRemark(String remark) {
+        this.remark = remark;
+    }
+}

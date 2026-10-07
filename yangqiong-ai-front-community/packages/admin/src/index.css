@@ -1,0 +1,149 @@
+/* 治理三件套（驾驶舱/Inbox/Agent 360°）及其 shared 组件依赖 Tailwind utilities。
+   此处仅引入 utilities 层（preflight 已在 tailwind.config 中关闭），不影响既有 antd 页面零回归。 */
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* admin 关闭了 Tailwind preflight，此处补治理 shared 组件依赖的最小 button 重置；
+   antd 按钮由类选择器显式声明样式，不受影响 */
+button {
+  background-color: transparent;
+  border: 0 solid;
+  cursor: pointer;
+}
+
+/* Tailwind transform/blur/shadow 等工具类是 --tw-* 变量组合声明，变量默认值由 base 层注入；
+   本工程 preflight 关闭会连带关闭该注入，导致 translate-x-full 等类整体失效（抽屉无法移出屏幕）。
+   此处手动补回变量初始化块（仅声明 CSS 变量，对 antd 页面零影响）。 */
+*,
+::before,
+::after {
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style: ;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* 全局滚动条美化：细圆角拇指+透明轨道，修复原生滚动条白底轨道在深色界面上的突兀感 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: rgba(148, 163, 184, 0.35);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.55);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 深色侧边栏内滚动条改用半透明白拇指，与深色导航背景协调 */
+.ant-layout-sider,
+.ant-layout-sider * {
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+.ant-layout-sider *::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.ant-layout-sider *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 企业版锁图标在禁用上下文中跟随禁用蒙层（对齐 Vue 编辑器 wf-sidebar__item--disabled 的 opacity: 0.45），
+   独立标识场景（Tooltip 旁的锁）不受影响 */
+.ant-btn:disabled .gov-lock-filled,
+.ant-btn-disabled .gov-lock-filled,
+.ant-tabs-tab-disabled .gov-lock-filled,
+.ant-dropdown-menu-item-disabled .gov-lock-filled,
+.ant-select-item-option-disabled .gov-lock-filled,
+.ant-radio-button-wrapper-disabled .gov-lock-filled,
+.ant-checkbox-wrapper-disabled .gov-lock-filled {
+  opacity: 0.45;
+}

@@ -1,0 +1,529 @@
+
+.yq-page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #efe7d4;
+  isolation: isolate;
+  background:
+    radial-gradient(170% 130% at 84% 2%, rgba(233, 191, 120, 0.34) 0%, rgba(233, 191, 120, 0) 50%),
+    radial-gradient(120% 90% at 6% 100%, rgba(30, 60, 92, 0.5) 0%, rgba(30, 60, 92, 0) 55%),
+    linear-gradient(152deg, #08111e 0%, #0b1a2e 46%, #1b130a 100%);
+}
+
+/* 墨蓝画布上的低对比织纹，透气而不抢主体 */
+.yq-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-image:
+    linear-gradient(rgba(224, 188, 120, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(224, 188, 120, 0.045) 1px, transparent 1px);
+  background-size: 52px 52px;
+  -webkit-mask-image: radial-gradient(130% 120% at 50% 10%, #000 34%, transparent 98%);
+  mask-image: radial-gradient(130% 120% at 50% 10%, #000 34%, transparent 98%);
+}
+
+/* 顶部呼吸金线 */
+.yq-topline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 2%, #e3c079 30%, #fbf1d2 50%, #e3c079 70%, transparent 98%);
+  opacity: 0;
+  animation: yqBreathe 6s ease-in-out 1s infinite;
+}
+
+/* 右上旭日金晖：一大一小两个同心光环，跨越中线渗入左侧 */
+.yq-halo {
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.yq-halo-r {
+  top: -230px;
+  right: -150px;
+  width: 620px;
+  height: 620px;
+  border: 1px solid rgba(227, 192, 121, 0.34);
+  box-shadow:
+    0 0 0 60px rgba(227, 192, 121, 0.04),
+    0 0 0 150px rgba(227, 192, 121, 0.025),
+    inset 0 0 120px rgba(227, 192, 121, 0.12);
+  animation: yqHaloPulse 9s ease-in-out infinite;
+}
+
+/* 左下墨蓝衬托光 */
+.yq-glow-l {
+  position: absolute;
+  left: -140px;
+  bottom: -120px;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  z-index: -1;
+  background: rgba(34, 66, 100, 0.55);
+  filter: blur(90px);
+  pointer-events: none;
+  animation: yqDrift 18s ease-in-out infinite alternate;
+}
+
+/* 右下地平线大圆弧：横贯画面底端的金色天际线隐喻 */
+.yq-arc {
+  position: absolute;
+  right: -180px;
+  bottom: -500px;
+  width: 1200px;
+  height: 1200px;
+  z-index: 0;
+  pointer-events: none;
+}
+.yq-arc i {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(227, 192, 121, 0.3);
+}
+.yq-arc-c2 {
+  inset: 120px;
+  border-color: rgba(227, 192, 121, 0.2) !important;
+}
+.yq-arc-c3 {
+  inset: 240px;
+  border-color: rgba(227, 192, 121, 0.12) !important;
+}
+
+/* 底部横贯金线（发光细带） */
+.yq-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(227, 192, 121, 0.7) 24%, rgba(251, 241, 210, 0.95) 50%, rgba(227, 192, 121, 0.7) 76%, transparent);
+  box-shadow: 0 0 18px rgba(227, 192, 121, 0.5);
+}
+
+/* ---------- 内容框架 ---------- */
+.yq-frame {
+  position: relative;
+  z-index: 1;
+  width: min(1500px, 100%);
+  margin: 0 auto;
+  padding: 42px clamp(46px, 6vw, 96px) 30px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- 品牌栏 ---------- */
+.yq-brand-bar {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  animation: yqFadeUp 0.9s ease both;
+}
+.yq-brand-mark {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(227, 192, 121, 0.55);
+  background: linear-gradient(150deg, rgba(227, 192, 121, 0.18), rgba(150, 116, 52, 0.05));
+  color: #ecd9a8;
+  font-size: 20px;
+  font-weight: 700;
+  box-shadow: inset 0 0 18px rgba(227, 192, 121, 0.12);
+}
+.yq-brand-name strong,
+.yq-brand-name span {
+  display: block;
+}
+.yq-brand-name strong {
+  font-size: 19px;
+  letter-spacing: 0.04em;
+  color: #f4eedd;
+}
+.yq-brand-name span {
+  margin-top: 4px;
+  color: #8fa5bd;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+/* ---------- 主区：左文案 · 右表单（共处一体画布） ---------- */
+.yq-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(380px, 440px);
+  gap: clamp(40px, 6vw, 110px);
+  align-items: center;
+  animation: yqFadeUp 0.9s 0.15s ease both;
+}
+
+.yq-hero {
+  max-width: 680px;
+  padding: 30px 0;
+}
+.yq-eyebrow {
+  display: inline-block;
+  margin-bottom: 22px;
+  padding: 7px 14px;
+  border: 1px solid rgba(227, 192, 121, 0.35);
+  color: #e3c079;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  background: rgba(227, 192, 121, 0.05);
+}
+.yq-title {
+  margin: 0;
+  color: #f7f1e1;
+  font-size: clamp(38px, 4.4vw, 64px);
+  line-height: 1.22;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.yq-title br {
+  display: none;
+}
+.yq-sub {
+  max-width: 560px;
+  margin: 26px 0 36px;
+  color: #b6c1cf;
+  font-size: 15px;
+  line-height: 1.95;
+}
+.yq-capability-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 30px;
+}
+.yq-capability-list li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #d3cdbb;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+.yq-capability-list .anticon {
+  color: #e3c079;
+}
+
+/* ---------- 磨砂登录卡片 ---------- */
+.yq-login {
+  display: flex;
+  justify-content: flex-end;
+}
+.yq-login-card {
+  position: relative;
+  width: 100%;
+  padding: 40px 38px 34px;
+  border-radius: 18px;
+  border: 1px solid rgba(227, 192, 121, 0.4);
+  background: linear-gradient(160deg, rgba(253, 250, 244, 0.94) 0%, rgba(246, 240, 226, 0.9) 100%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  backdrop-filter: blur(10px) saturate(120%);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  animation: yqFadeUp 1s 0.35s ease both;
+}
+/* 卡片顶部一道金边高光 */
+.yq-login-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 24px;
+  right: 24px;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, #d8b46a, transparent);
+}
+
+.yq-login-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 16px;
+  color: #a98846;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+.yq-login-eyebrow .anticon {
+  color: #c9a25f;
+}
+.yq-login-head {
+  margin-bottom: 32px;
+}
+.yq-login-head h2 {
+  margin: 0 0 12px;
+  color: #262c37;
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.yq-login-head p {
+  margin: 0;
+  color: #7c8798;
+  font-size: 14px;
+}
+
+.yq-login-form .ant-form-item {
+  margin-bottom: 22px;
+}
+.yq-login-form .ant-form-item-label > label {
+  color: #465366;
+  font-size: 13px;
+  font-weight: 600;
+}
+.yq-login-form .ant-input-affix-wrapper {
+  min-height: 52px;
+  padding-inline: 16px;
+  border: 1px solid #e0d7c6;
+  border-radius: 9px;
+  background: rgba(255, 253, 248, 0.95);
+  box-shadow: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.yq-login-form .ant-input-prefix {
+  margin-right: 11px;
+  color: #b99a68;
+}
+.yq-login-form .ant-input {
+  color: #262c37;
+}
+.yq-login-form input::placeholder {
+  color: #a9a295;
+}
+.yq-login-form .ant-input-affix-wrapper:hover {
+  border-color: #c9a25f;
+}
+.yq-login-form .ant-input-affix-wrapper-focused,
+.yq-login-form .ant-input-affix-wrapper:focus-within {
+  border-color: #b98f45;
+  box-shadow: 0 0 0 3px rgba(185, 143, 69, 0.16);
+  background: #fffdf8;
+}
+
+/* 校验错误态：暖赭色贴合墨蓝×鎏金色系，避免生硬正红（antd v5 状态类名） */
+.yq-login-form .ant-form-item-explain-error {
+  color: #b5502f;
+}
+.yq-login-form .ant-input-affix-wrapper-status-error,
+.yq-login-form .ant-input-affix-wrapper-status-error:hover,
+.yq-login-form .ant-input-affix-wrapper-status-error:focus-within {
+  border-color: #cf8a5a;
+  background: #fff8f2;
+}
+.yq-login-form .ant-input-affix-wrapper-status-error.ant-input-affix-wrapper-focused {
+  box-shadow: 0 0 0 3px rgba(207, 138, 90, 0.18);
+}
+.yq-login-form .ant-form-item-status-error .ant-input-prefix .anticon {
+  color: #c96f42;
+}
+
+.yq-login-form .yq-submit-item {
+  margin-top: 30px;
+  margin-bottom: 0;
+}
+.yq-submit-btn.ant-btn-primary {
+  position: relative;
+  height: 52px;
+  border: none;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #b98f45 0%, #d3ac5f 52%, #b98f45 100%);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  box-shadow: 0 12px 28px rgba(176, 137, 64, 0.38);
+  overflow: hidden;
+}
+.yq-submit-btn.ant-btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.42), transparent);
+  transform: skewX(-24deg);
+  animation: yqSheen 3.4s ease-in-out infinite;
+}
+.yq-submit-btn.ant-btn-primary:hover {
+  background: linear-gradient(135deg, #ac843f 0%, #caa357 52%, #ac843f 100%) !important;
+  box-shadow: 0 14px 32px rgba(176, 137, 64, 0.46);
+}
+/* 覆盖 antd v5 通过 :not(:disabled):hover/:active 施加的默认主色（蓝色） */
+.yq-submit-btn.ant-btn-primary:not(:disabled):hover,
+.yq-submit-btn.ant-btn-primary:not(:disabled):active,
+.yq-submit-btn.ant-btn-primary:not(:disabled):focus {
+  border-color: transparent !important;
+  background: linear-gradient(135deg, #ac843f 0%, #caa357 52%, #ac843f 100%) !important;
+}
+
+.yq-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 26px 0;
+  color: #9c9587;
+  font-size: 11px;
+}
+.yq-divider::before,
+.yq-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e6dfcf;
+}
+
+.yq-quick-btn.ant-btn {
+  height: 50px;
+  border: 1px solid #d6cdba;
+  border-radius: 9px;
+  color: #465366;
+  background: rgba(255, 253, 248, 0.6);
+  font-weight: 500;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.yq-quick-btn.ant-btn .anticon {
+  color: #b98f45;
+}
+.yq-quick-btn.ant-btn:hover {
+  border-color: #b98f45;
+  color: #8a6a33;
+  background: rgba(185, 143, 69, 0.08);
+}
+
+.yq-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+  margin-top: 30px;
+  color: #9d968a;
+  font-size: 11px;
+}
+.yq-badges span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.yq-badges .anticon {
+  color: #b98f45;
+}
+
+/* ---------- 页脚 ---------- */
+.yq-foot {
+  text-align: center;
+  padding-top: 6px;
+  color: #7c8ba0;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  animation: yqFadeUp 0.9s 0.6s ease both;
+}
+
+/* ---------- 动效 ---------- */
+@keyframes yqBreathe {
+  0%, 100% { opacity: 0; transform: scaleX(0.6); }
+  50% { opacity: 1; transform: scaleX(1); }
+}
+@keyframes yqFadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes yqDrift {
+  from { transform: translate(0, 0); }
+  to { transform: translate(26px, -22px); }
+}
+@keyframes yqHaloPulse {
+  0%, 100% { opacity: 0.55; box-shadow: 0 0 0 60px rgba(227, 192, 121, 0.04), 0 0 0 150px rgba(227, 192, 121, 0.025), inset 0 0 120px rgba(227, 192, 121, 0.12); }
+  50% { opacity: 0.9; box-shadow: 0 0 0 76px rgba(227, 192, 121, 0.05), 0 0 0 176px rgba(227, 192, 121, 0.03), inset 0 0 150px rgba(227, 192, 121, 0.16); }
+}
+@keyframes yqSheen {
+  0%, 60% { left: -60%; }
+  100% { left: 130%; }
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 1080px) {
+  .yq-frame {
+    padding-inline: clamp(28px, 5vw, 48px);
+  }
+  .yq-main {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 400px);
+    gap: 40px;
+  }
+  .yq-title {
+    font-size: clamp(32px, 5vw, 46px);
+  }
+}
+
+@media (max-width: 860px) {
+  .yq-page {
+    overflow: auto;
+  }
+  .yq-main {
+    grid-template-columns: 1fr;
+    gap: 26px;
+    padding: 20px 0 8px;
+  }
+  .yq-hero {
+    max-width: none;
+    padding: 0;
+  }
+  /* 窄屏精简：只留眉标与标题，让登录表单进入首屏 */
+  .yq-sub,
+  .yq-capability-list {
+    display: none;
+  }
+  .yq-eyebrow {
+    margin-bottom: 14px;
+  }
+  .yq-title br {
+    display: inline;
+  }
+  .yq-login {
+    justify-content: center;
+  }
+  .yq-login-card {
+    max-width: 440px;
+  }
+  .yq-arc {
+    opacity: 0.6;
+  }
+}
+
+@media (max-width: 560px) {
+  .yq-frame {
+    padding: 26px 20px 24px;
+  }
+  .yq-brand-name span {
+    display: none;
+  }
+  .yq-title {
+    font-size: 28px;
+    line-height: 1.3;
+  }
+  .yq-login-card {
+    padding: 32px 24px 28px;
+  }
+  .yq-login-head h2 {
+    font-size: 27px;
+  }
+}

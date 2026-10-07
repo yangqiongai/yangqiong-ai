@@ -1,0 +1,23 @@
+ai:
+  agent:
+    trace:
+      enabled: false          # 运行Trace落库总开关（默认关，生产按环境打开）
+      sample-mode: ratio      # 采样模式（ratio=按采样率比例采样，all=全量采集）
+      sample-rate: 1.0        # 采样率（0~1，根Span决定整条trace是否采集，ratio模式下生效）
+      always-keep-errors: false # 失败Span必采（覆盖采样决策，ratio模式下实现"全量+失败必采"）
+      retention-days: 30      # Span数据保留天数（0或负数关闭保留期清理）
+      retention-batch-size: 5000 # 保留期清理单批删除上限（防大事务锁表）
+      retention-cron: "0 30 3 * * ?" # 保留期清理调度周期（凌晨错峰执行）
+      queue-capacity: 10000   # 内存队列容量（满则丢弃并计数告警）
+      batch-size: 200         # 批量落库条数
+      flush-interval-ms: 2000 # 刷新间隔（毫秒）
+  cache:
+    agent-type:
+      ttl-minutes: 5      # Agent缓存过期时间（分钟）
+      max-size: 1000      # Agent缓存最大条目数
+    tool-config:
+      ttl-minutes: 5      # 工具配置缓存过期时间（分钟）
+      max-size: 2000      # 工具配置缓存最大条目数
+    skill-config:
+      ttl-minutes: 5      # 技能配置缓存过期时间（分钟）
+      max-size: 500       # 技能配置缓存最大条目数

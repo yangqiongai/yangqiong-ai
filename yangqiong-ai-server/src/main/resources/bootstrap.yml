@@ -1,0 +1,14 @@
+spring:
+  cloud:
+    nacos:
+      enabled: false
+      discovery:
+        server-addr: localhost:8848
+      config:
+        enabled: false
+eureka:
+  client:
+    enabled: false
+
+mybatis-plus:
+  mapper-locations: classpath*:com/yangqiongai/**/mapper/**/*.xml

@@ -1,0 +1,4 @@
+com.yangqiongai.ai.agent.harness.config.HarnessMemoryAutoConfiguration
+com.yangqiongai.ai.agent.harness.config.ModelProviderAutoConfiguration
+com.yangqiongai.ai.agent.harness.config.HarnessAutoConfiguration
+com.yangqiongai.ai.agent.harness.config.HarnessDistributedStoreAutoConfiguration

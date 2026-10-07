@@ -1,0 +1,27 @@
+{
+  "name": "yangqiong-ai-front-community",
+  "private": true,
+  "version": "1.0.0",
+  "description": "YangQiong AI Frontend Monorepo（社区版：单组织管理后台）",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "pnpm dev:admin",
+    "dev:admin": "pnpm --filter admin dev",
+    "build": "pnpm --recursive build",
+    "build:admin": "pnpm --filter admin build",
+    "preview": "pnpm --recursive preview",
+    "test": "pnpm --recursive test",
+    "lint": "pnpm --recursive lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "type-check": "pnpm --recursive type-check"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

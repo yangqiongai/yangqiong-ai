@@ -1,0 +1,237 @@
+server:
+  port: 8082
+  tomcat:
+    # 不限制请求体吞入大小，聊天支持粘贴base64图片（生产nginx网关需同步放开client_max_body_size 10m）
+    max-swallow-size: -1
+
+spring:
+  config:
+    import: "optional:configserver:"
+  application:
+    name: ai-server
+  servlet:
+    multipart:
+      # 支持大文件上传（与Docling解析器100MB上限匹配）
+      max-file-size: 200MB
+      max-request-size: 210MB
+  datasource:
+    # 默认本地开发账号，生产环境请通过环境变量覆盖
+    url: jdbc:mysql://localhost:3306/yangqiong-ai-opensource?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
+    driverClassName: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      # Redis 连接（工作流状态/会话缓存等），生产环境通过环境变量覆盖
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+# Flyway（db/enterprise为商业版迁移脚本目录，目录不存在时Flyway自动忽略；关闭占位符替换以保留能力提示词模板中的${参数}字面量）
+spring.flyway:
+  enabled: true
+  placeholder-replacement: false
+  locations:
+    - classpath:db/migration
+  baseline-on-migrate: true
+  out-of-order: true
+  validate-on-migrate: false
+  ignore-migration-patterns: "*:missing"
+
+# AI
+ai:
+  platform:
+    scheduler:
+      cluster:
+        # 平台定时任务Quartz集群开关：引入集群模块后默认开启（JDBC JobStore，多节点任务去重+故障转移），false回退内存模式
+        enabled: true
+  auth:
+    # 社区管理端登录依赖本地认证（JWT）；生产环境通过环境变量注入密钥
+    enabled: true
+    # 登录凭证RSA解密私钥(Base64编码PKCS#8，与前端内置公钥配对)；生产环境通过环境变量注入
+    rsa-private-key: ${AUTH_RSA_PRIVATE_KEY:MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCwhsWioxClITPdHDMvp4qgCrrgKIDV2wypVsFdcz+MCU9HHvtEzP7giVHmTp9RXlWb6cTEHauXTM3ctJys+puUFvff2IUfNGcmGZ9t4PpYO99+7xCQ2H2V0clszCfw75TaWAEgds2wlByV/4Jd+SYNY/XFDD4f9P8YCpOfK+vUIJx+eshcWxVUbmDXUOJb1cb9zegI+cqdvTMqNS95Jg2X1gGYMt4zZ0kO4CNxIp1/Cxd5wELqq1b8hGFaDouJZDZhJ11994zSHWRpF8U3xZn/7tZwe0RVL8byX9RJm0q4JsMzkoB7SivJOOvf3xV2RxlrTVELZIuKZe/d9Z6drZhfAgMBAAECggEAMwE96ZgkHxJQ4fpb79EBBO0Uwd/yGdiI+ATRKic6nUOzXGFfSKnSmx4SQ/FDp0cShVIuQFwyUC0o7jRhcLmYalmYlV0CWdnSU/fjUORIcWYbVZnNt4xV/Qv4ny79+2e+Irh62t544CRrfgutp2ltzUCsqpq2+JTZgCDONpeCNHAcmNe7FXwbF2xaStRzDxxyEpoELzSy3XeDBjWRVV/5GVB8aylvWEUzb3PQy3dafLFrWkxZLR4SRJo8hByadLwR3OJzyWAPJgNYPl/38EhKaLxIecup+PpGzqsJer/cLOq0b9CH+/N+l+N/15ZMrxsZjsj+v/p/5aygHP5bHBExQQKBgQDk5JB7PQxKTTW/M6VPudker+E4wmiX3biasusPLMoT3ywT6NqQJPEev8BoLdWXOyQkWKgNCKVFIz8XrUFZHoZFgRPB/vvs2dmPr8HcjETB7tNPcw51tDX9kMTLSfX/DdsDm1BltEIzZDe2EjxO4yX7387Ks0iFP/E80bS1fCsS/QKBgQDFbphgMevTF49Y+JaC5v7ppGRtZLrq6Bxh/L5KHS/C3rZllALUXEVWeycVJf08EjTtkCwsBWZxa6ZlD2wzziwMAk2Rmi+IGAdJ1M3EHE35sFPb6qiQs7yuwz5YadWno7axt44/YYkt/jr3yheGJnAPBtz58olC9nemQ4p0LxQ9iwKBgDUfPtD7SCDubmzjpZgtP9C5bQHpTLECSlfM8nThJj0abHZqcl9F05gZVKRZDts8ZJTy5n2v5ft3xKrQEPyH8w2qeVVqwjkkDjQkzE9NVp/Tt8MWpuJ2YploweOUVL1PD+d0YmJYRYz701o0PT7pxOUB+lJc7ZXPU0OUP+Zm3PBZAoGAEuvzjJycNmH2qhdBDZCn86p+uYFC7MqMFdQMRLwhXLLNllSmJMYnGw+4gi1e5Mf17KK5qQpndA1WKC9fNmPXEtuRpZe6YHe1Ex1jDx2LV5fPoa8OsreXKMSrj/usr2FgXA30gxyM8iyAaEklEgVTDg2hVg8pmpJWi0fD2Di+3tsCgYEAhJadQCAcmO42VvJKwb9GxtS11zf+nXEmEjY1uGWws4y7dq6GBz8aAi7DUNv2VTdm3h7cMzehOoGBW1jsyvH4wvDamji8GucLh9tBc8CO1HvouvB7Zl5HPO9EXiPi2Uz5qbMUeLMePPW9XWv+Qka95AJHrNLDBFIRDilz1QPVw94=}
+    # JWT 登录令牌
+    jwt:
+      secret: ${AUTH_JWT_SECRET:yangqiong-ai-community-dev-jwt-secret-0123456789abcdef}
+      expiration-ms: 86400000
+  scope:
+    # 数据作用域隔离：按请求头识别作用域，业务数据按作用域隔离
+    enabled: true
+    # 未携带作用域请求头时使用的默认作用域
+    default-scope-id: default
+    # 作用域识别请求头名称
+    header-name: X-Scope-Id
+    # 跨作用域管理的平台管理员账号
+    admins:
+      - admin
+  agent:
+    # 会话上下文压缩：消息数达到阈值触发，压缩后保留最近消息数
+    compaction:
+      trigger-messages: 40
+      keep-messages: 12
+    # 工具结果超长裁剪：超过上限截断只留预览，防止上下文膨胀
+    tool-eviction:
+      max-result-chars: 8000
+      preview-chars: 2000
+    # 默认工具选择策略（auto=由模型自主决定）
+    default-tool-choice: auto
+    evaluation:
+      # 评测面总开关(数据集/运行/加载器)
+      enabled: true
+    # Agent 工具权限控制
+    permission:
+      enabled: true
+      # 默认权限模式
+      default-mode: DEFAULT
+    # 优雅停机等待时长（秒）
+    shutdown:
+      timeout-seconds: 30
+    # Agent 执行链路追踪
+    tracing:
+      enabled: true
+      # 追踪数据本地 JSONL 文件落盘
+      jsonl:
+        enabled: true
+        path: ./logs/agent-traces
+    # HTTP 入口追踪中间件
+    trace-middleware:
+      enabled: true
+    # 技能过滤（all=加载全部技能，白名单模式时仅加载 skills 列表）
+    skill-filter:
+      mode: all
+      skills: []
+    # 子代理声明由 LLM 动态生成（需配置可用模型编码，默认关闭）
+    subagent:
+      generation:
+        enabled: false
+        model-code: ""
+    trace:
+      enabled: true
+      sample-mode: ratio            # ratio=按采样率比例采样，all=全量采集
+      sample-rate: 1.0
+      always-keep-errors: false     # 失败Span必采（覆盖采样决策，ratio下实现全量+失败必采）
+      retention-days: 7             # Span保留天数（0或负数关闭保留期清理）
+      retention-batch-size: 5000    # 保留期清理单批删除上限
+      retention-cron: "0 30 3 * * ?" # 保留期清理调度周期（凌晨错峰执行）
+      queue-capacity: 10000          # Span 异步写入队列容量
+      batch-size: 200                # 批量写入大小
+      flush-interval-ms: 2000        # 批量写入刷新间隔毫秒
+    # 模型用量计量：按定价聚合 token 用量入账（社区模块提供，默认关闭）
+    metering:
+      enabled: false
+      pricing-cache-ms: 60000
+      aggregate-cron: "0 0 * * * ?"
+    queue:
+      # Agent任务队列调度器开关：触发器入队的QUEUED任务由该调度器抢占执行；对话/A2A/MCP链路默认sync同步直执不受影响
+      enabled: true
+    # 治理凭据缓存时长（毫秒）
+    governance:
+      credential-cache-ms: 60000
+    observability:
+      # 总开关：true 时激活OTLP导出/指标采集/审批等待监控自动装配
+      enabled: true
+      # OTLP Trace 导出端点（如 http://localhost:4318），留空关闭Trace导出
+      otlp-endpoint: ""
+      # 上报服务名（写入OTLP Resource属性 service.name）
+      service-name: yangqiong-ai-server
+      metrics:
+        # 指标采集开关
+        enabled: true
+        # 公共标签
+        common-tags: {}
+      approval-wait:
+        # 跨进程审批等待监控开关（需容器存在ApprovalStore Bean，M6分布式存储接入后开启）
+        enabled: false
+        # 监控的scope列表
+        scopes:
+          - default
+        # 扫描刷新间隔毫秒
+        refresh-interval-ms: 30000
+  security:
+    # 凭据加密主密钥（生产必须通过环境变量注入）
+    secret-master-key: ${AI_SECRET_MASTER_KEY:}
+  trust:
+    identity:
+      # 身份信任体系主密钥（生产必须通过环境变量注入）
+      master-key: ${AI_IDENTITY_MASTER_KEY:smoke-test-master-key-0123456789abcdef}
+  governance:
+    # 治理中心菜单特性位
+    enterprise: false
+  # 检索增强生成（知识库问答）
+  rag:
+    enabled: true
+    # 向量化模型（本地 DJL 推理）
+    embed:
+      model-code: bge-base-zh-djl
+    # 查询改写（远程 LLM 优化检索词）
+    query-rewrite:
+      enabled: true
+      model-code: deepseek
+    rerank:
+      enabled: true                       # 全局总开关：关闭时agent级与请求级rerank开关均不生效
+      model-code: deepseek
+    parser:
+      docling-max-file-size: 104857600    # Docling解析器最大文件大小（100MB），超过降级Tika
+      docling-page-size: 10               # Docling分页解析每批页数（仅对PDF生效）
+      docling-max-pages: 0                # Docling分页解析最大页数（0为不限制）
+    docling:
+      url: http://127.0.0.1:5001          # Docling-serve服务地址，为空时直接降级Tika解析
+  # MCP 客户端（Agent 连接外部 MCP 服务器调用工具）
+  mcp:
+    enabled: true
+  # 安全护栏（输入/输出内容防护）
+  guardrails:
+    enabled: true
+  # 技能系统
+  skill:
+    enabled: true
+    # 技能评测模型
+    eval:
+      model-code: deepseek
+  # 联网搜索
+  web-search:
+    enabled: true
+    provider: duckduckgo
+    api-key: ""
+    url: ""
+    timeout: 10
+  # 平台生态开放：本服务作为 MCP/A2A 服务器对外提供 Agent 能力
+  ecosystem:
+    enabled: true
+    # 对外 MCP 服务器端点
+    mcp:
+      enabled: true
+      endpoint: /mcp
+      server-name: yangqiong-ai-platform
+      server-version: 1.0.0
+    # 对外 A2A 服务器（Agent 互操作协议）
+    a2a:
+      enabled: true
+      base-url: http://localhost:8082
+  # 文件存储（local=本地目录，minio=S3 兼容对象存储）
+  storage:
+    type: local
+    # MinIO/S3 兼容存储连接（type=minio 时生效）
+    minio:
+      endpoint: http://localhost:9000
+      access-key: ${MINIO_ACCESS_KEY:minioadmin}
+      secret-key: ${MINIO_SECRET_KEY:minioadmin}
+      default-bucket: yangqiong-ai
+    qdrant:
+      # 向量库地址，私有化部署通过环境变量QDRANT_HOST指向实际主机
+      host: ${QDRANT_HOST:localhost}
+      # 本地捆绑实例为非官方端口16334（gRPC），避免与用户已装Qdrant冲突
+      port: ${QDRANT_PORT:16334}
+# 各模块Mapper统一由全局面扫描器按@Mapper注解注册（存在AiMybatisAutoConfiguration时mybatis-plus自动扫描不生效，避免双注册）
+mybatis:
+  scan-basepackages: com.yangqiongai.**.mapper
+mybatis-plus:
+  mapper-locations: classpath*:com/yangqiongai/**/mapper/**/*.xml
+# Actuator 监控端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: metrics,health,info,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized

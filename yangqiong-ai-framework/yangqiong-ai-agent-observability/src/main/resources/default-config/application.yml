@@ -1,0 +1,30 @@
+ai:
+  agent:
+    observability:
+      # 总开关：true 时激活OTLP导出/指标采集/审批等待监控自动装配
+      enabled: false
+      # OTLP Trace 导出端点（如 http://localhost:4318），留空关闭Trace导出
+      otlp-endpoint: ""
+      # 上报服务名（写入OTLP Resource属性 service.name）
+      service-name: yangqiong-ai-agent
+      # 单次批量导出的最大Span数
+      trace-batch-size: 64
+      # 定时刷新间隔毫秒
+      trace-flush-interval-ms: 5000
+      # 导出HTTP请求超时毫秒
+      trace-export-timeout-ms: 5000
+      # 缓冲区最大Span数（超限丢弃最旧）
+      trace-max-buffered-spans: 2048
+      metrics:
+        # 指标采集开关
+        enabled: true
+        # 公共标签（如 env=prod），附加到全部指标
+        common-tags: {}
+      approval-wait:
+        # 跨进程审批等待监控开关（需容器存在ApprovalStore Bean）
+        enabled: true
+        # 监控的scope列表
+        scopes:
+          - default
+        # 扫描刷新间隔毫秒
+        refresh-interval-ms: 30000

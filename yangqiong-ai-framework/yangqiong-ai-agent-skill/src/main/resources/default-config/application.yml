@@ -1,0 +1,33 @@
+# 技能模块默认配置
+ai:
+  skill:
+    # 是否启用技能模块
+    enabled: true
+    # 条件技能映射（key=agentCode或通配符*，value=逗号分隔的skillId列表）
+    conditional-mapping: {}
+    # 安全扫描配置
+    security:
+      # 是否启用安全扫描
+      enabled: true
+      # 需要扫描的技能来源类型
+      scan-sources:
+        - UPLOADED
+        - GENERATED
+      # 默认信任等级（未配置trustLevel时使用，可选值：BUILTIN/TRUSTED/COMMUNITY/AGENT_CREATED）
+      default-trust-level: COMMUNITY
+    # 技能生成配置
+    generation:
+      # 生成技能使用的模型编码
+      model-code: deepseek
+      # Markdown正文必须包含的章节标题
+      required-sections:
+        - "## 目标"
+        - "## 工作流"
+        - "## 输入"
+        - "## 输出"
+    # 使用量追踪配置
+    usage-tracking:
+      # 是否启用使用量追踪
+      enabled: true
+      # 排行榜最大返回数量
+      top-limit: 20

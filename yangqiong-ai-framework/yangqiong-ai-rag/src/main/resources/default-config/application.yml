@@ -1,0 +1,124 @@
+ai:
+  rag:
+    # 检索基础配置
+    retrieve:
+      default-min-score: 0.6       # 默认最小相似度分数，低于此分数的候选结果将被过滤
+      max-per-doc: 2               # 单文档最大返回条数，限制同一文档返回的切片数量
+      min-top-k: 2                 # 向量检索最小TopK，Qdrant资源耗尽降级时的下限值
+      adaptive-top-k-multiplier: 3 # 自适应TopK倍数，切片数不足时扩大检索范围的倍率
+      future-timeout-seconds: 30   # 异步检索超时时间（秒）
+      # 融合评分权重配置（向量检索+全文检索混合打分）
+      fusion:
+        vector-weight: 40          # 向量检索路径权重
+        fulltext-weight: 24        # 全文检索路径权重
+        dual-lane-bonus: 16        # 双路命中加成（同时被向量和全文命中的候选额外加分）
+        query-hit-bonus: 12        # 查询词完整命中加成
+        term-hit-bonus: 3          # 分词命中加成
+        raw-score-factor: 10       # 原始分数放大因子
+        raw-score-cap: 20          # 原始分数放大上限
+
+    # 上下文窗口扩展配置（将命中切片扩展为带上下文的连贯片段）
+    context-expand:
+      min-keyword-len: 2           # 关键词最小长度，过滤无意义的短词
+      max-cluster-limit: 5         # 最多选取的文本区间聚类数
+      anchor-radius-ratio: 0.15    # 锚点扩展半径占窗口的比例
+      min-radius: 50               # 最小扩展半径（字符数），避免窗口太小时扩展为0
+      small-doc-chunk-ceiling: 30  # 小文档切片数阈值，切片数≤此值时全文直通（不做聚焦选择）
+      neighbor-span: 1             # 邻居扩展距离，1表示命中切片前后各扩展1个切片
+      focus-anchor-ceiling: 3      # 聚焦选择最多取的锚点数（得分最高的N个切片）
+      focus-neighbor-span: 1       # 聚焦锚点的邻居扩展距离
+
+    # 全文检索配置（SQL LIKE + 基础相关性打分）
+    fulltext:
+      fallback-result-size: 5      # LIKE兜底查询结果数
+      overfetch-factor: 6          # 超取因子，实际查询数量 = topK × overfetchFactor
+      min-overfetch: 30            # 最小超取数量，确保即使topK很小也有足够候选
+      like-fallback-limit: 50      # LIKE兜底查询最大限制数
+      base-relevance: 0.3          # 基础相关性分数，所有全文命中结果的底分
+      exact-match-bonus: 0.35      # 精确匹配加成（查询词完整出现在切片中）
+      term-hit-bonus: 0.1          # 分词命中加成（查询分词出现在切片中）
+      parent-title-bonus: 0.2      # 父文档标题命中加成
+
+    # 异步检索线程池配置
+    executor:
+      core-pool-size: 4            # 核心线程数
+      max-pool-size: 8             # 最大线程数
+      queue-capacity: 100          # 任务队列容量
+
+    # 重排序配置
+    rerank:
+      enabled: false               # 是否启用重排序
+      strategy: llm                # 重排序策略（llm=基于LLM重排序）
+      max-candidates: 20           # 参与重排序的最大候选数
+      model-code: default          # 重排序使用的模型编码
+
+    # 查询改写配置
+    query-rewrite:
+      enabled: false               # 是否启用查询改写
+      model-code: default          # 查询改写使用的模型编码
+
+    # 查询分解配置
+    query-decompose:
+      enabled: false               # 是否启用查询分解（将复杂查询拆分为多个子查询）
+      model-code: default          # 查询分解使用的模型编码
+      min-length: 10               # 触发查询分解的最小查询长度
+      max-sub-queries: 3           # 最大子查询数量
+      sub-query-top-k: 5           # 每个子查询的检索TopK
+
+    # 检索路由配置
+    route:
+      strategy: default            # 路由策略（default=默认路由, agentic=智能路由）
+      model-code: default          # 智能路由意图识别使用的模型编码
+      web-search-fallback-enabled: false  # 是否启用Web搜索兜底
+      fallback-sources:            # 兜底检索源列表
+        - search
+      web-search-max-results: 5    # Web搜索最大结果数
+
+    # 缓存配置
+    cache:
+      enabled: true                # 是否启用检索缓存
+      retrieve-ttl: 5m             # 检索结果缓存过期时间
+      retrieve-max-size: 5000      # 检索结果缓存最大条目数
+      version-ttl: 10m             # 知识库版本缓存过期时间
+      query-ttl: 30m               # 查询意图缓存过期时间
+      query-max-size: 1000         # 查询意图缓存最大条目数
+
+    # 重试配置
+    retry:
+      max-attempts: 3              # 最大重试次数
+      backoff-delay: 1s            # 重试基础延迟
+      backoff-multiplier: 2.0      # 重试延迟倍数（指数退避）
+
+    # 向量嵌入配置
+    embed:
+      model-code: bge-base-zh-djl  # 向量模型
+      default-vector-size: 1024    # 向量维度（需与嵌入模型输出维度一致）
+      max-retry-attempts: 3        # 嵌入调用最大重试次数
+      retry-base-delay-ms: 1000    # 嵌入调用重试基础延迟（毫秒）
+      batch-size: 20               # 批量嵌入大小（单次API调用包含的文本数）
+      failed-queue-capacity: 1000  # 嵌入失败队列容量
+      retry-interval: 5m           # 失败队列重试间隔
+
+
+    # 上下文评估配置
+    context-grade:
+      enabled: false               # 是否启用上下文评估（对检索结果质量打分）
+      model-code: default          # 上下文评估使用的模型编码
+      max-retries: 2               # 评估调用最大重试次数
+      confidence-threshold: 0.6    # 置信度阈值，低于此值的结果标记为低质量
+      max-evidences: 10            # 单次评估最大证据数
+
+    # 文档解析配置
+    parser:
+      tika-max-content-length: 10485760   # Tika解析器最大内容长度（10MB），超过截断
+      docling-max-file-size: 104857600    # Docling解析器最大文件大小（100MB），超过降级Tika
+      docling-page-size: 10               # Docling分页解析每批页数（仅对PDF生效）
+      docling-max-pages: 0                # Docling分页解析最大页数（仅对PDF生效，0为不限制）
+
+    # Docling服务配置
+    docling:
+      url: http://127.0.0.1:5001          # Docling-serve服务地址，为空时直接降级Tika解析
+
+    # 检索代理配置
+    retrieval-agent:
+      enabled: false               # 是否启用检索代理（自主决策检索策略的Agent）

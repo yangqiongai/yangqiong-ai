@@ -1,0 +1,3 @@
+com.yangqiongai.ai.platform.bss.scope.CommonScopeAutoConfiguration
+com.yangqiongai.ai.platform.bss.config.AiDataSourceAutoConfiguration
+com.yangqiongai.ai.platform.bss.config.AiMybatisAutoConfiguration

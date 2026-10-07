@@ -1,0 +1,1 @@
+$env:JAVA_HOME='D:\JDK\jdk-17'; $env:PATH='D:\JDK\jdk-17\bin;' + $env:PATH; mvn spring-boot:run -pl ai-server "-Dspring-boot.run.arguments=--server.port=8080"
