@@ -30,6 +30,11 @@ ai:
         max-tokens: 4096
         # 请求超时（秒）
         timeout-seconds: 60
+      context:
+        # 上下文窗口Token上限（0=不启用，>0时每轮调用大模型前按截断策略裁剪历史，agentConfig.maxContextTokens可按Agent覆盖）
+        max-tokens: 0
+        # 历史截断策略：HEAD保留最早 / TAIL保留最新 / SUMMARY摘要压缩（需启用摘要压缩）
+        truncation-strategy: TAIL
     orchestration:
       # 子代理声明动态生成开关
       dynamic:

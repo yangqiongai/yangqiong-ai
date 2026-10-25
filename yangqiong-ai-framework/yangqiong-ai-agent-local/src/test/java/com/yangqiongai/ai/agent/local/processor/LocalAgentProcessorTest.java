@@ -78,7 +78,7 @@ class LocalAgentProcessorTest {
     }
 
     /**
-     * 有效_workspaceId时注入沙箱根与审批层级
+     * 有效_workspaceId时注入沙箱根，同步执行审批降级FULL_ACCESS放行写删操作
      */
     @Test
     void buildAgentBuilderInjectsWorkspaceSandbox() throws Exception {
@@ -90,21 +90,88 @@ class LocalAgentProcessorTest {
 
         verify(builder).fileToolsEnabled(true);
         verify(builder).fileToolkit(eq(root.toString()), isNull());
-        verify(builder).approvalMode(AgentApprovalMode.MANUAL);
+        verify(builder).approvalMode(AgentApprovalMode.FULL_ACCESS);
     }
 
     /**
-     * 各审批层级正确映射到引擎枚举
+     * 流式执行保持工作区原审批层级，对话场景写删类ASK暂停可恢复续跑
      */
     @Test
     void buildAgentBuilderMapsAllApprovalModes() throws Exception {
         Path root = Files.createDirectories(tempDir.resolve("ws2"));
         AgentRequest request = workspaceRequest(2L, "u1");
-        when(workspaceService.resolveEnabled(2L, "u1")).thenReturn(workspaceInfo(root.toString(), "FULL_ACCESS"));
+        request.addBody(com.yangqiongai.ai.agent.core.task.StepRecordingManager.INTERNAL_EXECUTION_MODE, "stream");
+        when(workspaceService.resolveEnabled(2L, "u1")).thenReturn(workspaceInfo(root.toString(), "MANUAL"));
+
+        processor.buildAgentBuilder(request, "提示词");
+
+        verify(builder).approvalMode(AgentApprovalMode.MANUAL);
+    }
+
+    /**
+     * 同步执行AUTO层级同样降级FULL_ACCESS，且不装配AI审批裁判与删除类强制人工名单
+     */
+    @Test
+    void buildAgentBuilderDegradesAutoApprovalForSyncExecution() throws Exception {
+        Path root = Files.createDirectories(tempDir.resolve("ws-auto"));
+        AgentRequest request = workspaceRequest(5L, "u1");
+        when(workspaceService.resolveEnabled(5L, "u1")).thenReturn(workspaceInfo(root.toString(), "AUTO"));
 
         processor.buildAgentBuilder(request, "提示词");
 
         verify(builder).approvalMode(AgentApprovalMode.FULL_ACCESS);
+        verify(builder, never()).requireApproval(any());
+        verify(builder, never()).approvalJudgeModel(any());
+    }
+
+    /**
+     * 节点参数_approvalBypass=workspace时同步执行保持工作区审批层级，不降级放行
+     */
+    @Test
+    void buildAgentBuilderKeepsWorkspaceApprovalWhenBypassWorkspace() throws Exception {
+        Path root = Files.createDirectories(tempDir.resolve("ws-keep"));
+        AgentRequest request = workspaceRequest(6L, "u1");
+        request.addBody("_approvalBypass", "workspace");
+        when(workspaceService.resolveEnabled(6L, "u1")).thenReturn(workspaceInfo(root.toString(), "MANUAL"));
+
+        processor.buildAgentBuilder(request, "提示词");
+
+        verify(builder).approvalMode(AgentApprovalMode.MANUAL);
+    }
+
+    /**
+     * 节点参数_approvalBypass=auto显式声明放行，与缺省行为一致降级FULL_ACCESS
+     */
+    @Test
+    void buildAgentBuilderDegradesWhenBypassAuto() throws Exception {
+        Path root = Files.createDirectories(tempDir.resolve("ws-bypass"));
+        AgentRequest request = workspaceRequest(7L, "u1");
+        request.addBody("_approvalBypass", "auto");
+        when(workspaceService.resolveEnabled(7L, "u1")).thenReturn(workspaceInfo(root.toString(), "MANUAL"));
+
+        processor.buildAgentBuilder(request, "提示词");
+
+        verify(builder).approvalMode(AgentApprovalMode.FULL_ACCESS);
+    }
+
+    /**
+     * 审批放行参数解析：workspace值（含大小写与空白）返回true，缺省与其他值返回false
+     */
+    @Test
+    void keepWorkspaceApprovalParsesBodyValue() {
+        AgentRequest request = workspaceRequest(1L, "u1");
+        assertThat(LocalAgentProcessor.keepWorkspaceApproval(request)).isFalse();
+
+        request.addBody("_approvalBypass", " workspace ");
+        assertThat(LocalAgentProcessor.keepWorkspaceApproval(request)).isTrue();
+
+        request.addBody("_approvalBypass", "WORKSPACE");
+        assertThat(LocalAgentProcessor.keepWorkspaceApproval(request)).isTrue();
+
+        request.addBody("_approvalBypass", "auto");
+        assertThat(LocalAgentProcessor.keepWorkspaceApproval(request)).isFalse();
+
+        assertThat(LocalAgentProcessor.keepWorkspaceApproval(null)).isFalse();
     }
 
     /**
@@ -176,6 +243,34 @@ class LocalAgentProcessorTest {
         request.addBody("harness.runId", "run_abc123");
 
         assertThat(LocalAgentProcessor.resolveRunId(request)).isEqualTo("run_abc123");
+    }
+
+    /**
+     * 同步执行（无stream标记）禁用ask_user，避免澄清暂停无恢复通道导致节点异常
+     */
+    @Test
+    void buildAgentBuilderDisablesAskUserForSyncExecution() throws Exception {
+        when(workspaceService.resolveEnabled(3L, "u1")).thenReturn(workspaceInfo(
+                Files.createDirectories(tempDir.resolve("ws-ask-sync")).toString(), "MANUAL"));
+
+        processor.buildAgentBuilder(workspaceRequest(3L, "u1"), "提示词");
+
+        verify(builder).askUserEnabled(false);
+    }
+
+    /**
+     * 流式执行保留ask_user，对话场景澄清卡片可续跑
+     */
+    @Test
+    void buildAgentBuilderKeepsAskUserForStreamExecution() throws Exception {
+        when(workspaceService.resolveEnabled(4L, "u1")).thenReturn(workspaceInfo(
+                Files.createDirectories(tempDir.resolve("ws-ask-stream")).toString(), "MANUAL"));
+        AgentRequest request = workspaceRequest(4L, "u1");
+        request.addBody(com.yangqiongai.ai.agent.core.task.StepRecordingManager.INTERNAL_EXECUTION_MODE, "stream");
+
+        processor.buildAgentBuilder(request, "提示词");
+
+        verify(builder).askUserEnabled(true);
     }
 
     /**

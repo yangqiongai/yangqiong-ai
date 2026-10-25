@@ -12,7 +12,7 @@
 
     <artifactId>yangqiong-ai-trust</artifactId>
     <name>yangqiong-ai-trust</name>
-    <description>AI Agent 信任底座 - 开放凭证/Agent身份/动作审计/权限画像</description>
+    <description>AI Agent 信任底座 - Agent身份/动作审计/权限画像</description>
 
     <dependencies>
         <dependency>

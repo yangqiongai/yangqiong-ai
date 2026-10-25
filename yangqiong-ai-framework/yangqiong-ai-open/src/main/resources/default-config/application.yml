@@ -5,3 +5,10 @@ ai:
         enabled: true
         dedup-ttl-seconds: 86400
         data-context-default-ttl-seconds: 3600
+        file-url-fetch:
+          max-size-mb: 50
+          connect-timeout-ms: 5000
+          read-timeout-ms: 30000
+          max-redirects: 3
+          # 允许拉取的内网地址白名单（精确IP/主机名或CIDR网段，用于放行内网MinIO等受信地址）
+          allowed-internal-hosts: []

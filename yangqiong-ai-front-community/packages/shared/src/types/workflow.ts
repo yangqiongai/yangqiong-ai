@@ -127,6 +127,9 @@ export interface WorkflowDefinitionUpdateRequest {
   category?: string;
   definition?: Record<string, unknown>;
   remark?: string;
+
+  /** true=另存新版本（version+1）；false或不传=原地覆盖最新版本 */
+  asNewVersion?: boolean;
 }
 
 /**

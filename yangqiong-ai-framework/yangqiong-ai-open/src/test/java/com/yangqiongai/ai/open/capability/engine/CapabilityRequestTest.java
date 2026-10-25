@@ -38,7 +38,6 @@ class CapabilityRequestTest {
         request.setArguments(Map.of("key1", "value1", "key2", 123));
         request.setDedupKey("dedup-key-001");
         request.setCaller("user-001");
-        request.setScopeId("scope-001");
 
         assertThat(request.getCapability()).isEqualTo("project-overview");
         assertThat(request.getDataContextRefs()).containsExactly("ref-1", "ref-2");
@@ -47,7 +46,6 @@ class CapabilityRequestTest {
                 .containsEntry("key2", 123);
         assertThat(request.getDedupKey()).isEqualTo("dedup-key-001");
         assertThat(request.getCaller()).isEqualTo("user-001");
-        assertThat(request.getScopeId()).isEqualTo("scope-001");
     }
 
     @Test
@@ -59,7 +57,6 @@ class CapabilityRequestTest {
         assertThat(request.getArguments()).isNull();
         assertThat(request.getDedupKey()).isNull();
         assertThat(request.getCaller()).isNull();
-        assertThat(request.getScopeId()).isNull();
     }
 
     @Test
@@ -70,20 +67,17 @@ class CapabilityRequestTest {
         request.setArguments(Map.of("k", "v"));
         request.setDedupKey("key");
         request.setCaller("user");
-        request.setScopeId("scope");
 
         request.setCapability(null);
         request.setDataContextRefs(null);
         request.setArguments(null);
         request.setDedupKey(null);
         request.setCaller(null);
-        request.setScopeId(null);
 
         assertThat(request.getCapability()).isNull();
         assertThat(request.getDataContextRefs()).isNull();
         assertThat(request.getArguments()).isNull();
         assertThat(request.getDedupKey()).isNull();
         assertThat(request.getCaller()).isNull();
-        assertThat(request.getScopeId()).isNull();
     }
 }

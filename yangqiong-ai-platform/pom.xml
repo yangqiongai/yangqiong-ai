@@ -32,7 +32,6 @@
         <module>yangqiong-ai-platform-api</module>
         <module>yangqiong-ai-platform-knowledge</module>
         <module>yangqiong-ai-platform-conversation</module>
-        <module>yangqiong-ai-platform-connector</module>
         <module>yangqiong-ai-platform-ecosystem</module>
         <module>yangqiong-ai-platform-auth</module>
         <module>yangqiong-ai-platform-system</module>
@@ -70,11 +69,6 @@
             <dependency>
                 <groupId>com.yangqiongai.ai</groupId>
                 <artifactId>yangqiong-ai-platform-server</artifactId>
-                <version>${ai.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.yangqiongai.ai</groupId>
-                <artifactId>yangqiong-ai-platform-connector</artifactId>
                 <version>${ai.version}</version>
             </dependency>
             <dependency>

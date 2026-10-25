@@ -45,4 +45,14 @@ public interface PendingResumeStore {
      * @return
      */
     boolean exists(String requestId);
+
+    /**
+     * 枚举全部未过期的挂起登记（只读，不改变登记状态）
+     * <p>
+     * 按expireTime过滤已过期条目，供企业版全局介入通道按用户维度枚举挂起的审批与澄清任务，
+     * 实现不得移除或修改登记，仅做快照式只读枚举。
+     * </p>
+     * @return 未过期登记列表，无登记时返回空列表
+     */
+    java.util.List<PendingResumeEntry> listActive();
 }

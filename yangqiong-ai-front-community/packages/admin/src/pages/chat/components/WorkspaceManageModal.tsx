@@ -94,6 +94,22 @@ export const WorkspaceManageModal: React.FC<WorkspaceManageModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string>();
 
+  /**
+   * 预填默认目录创建表单（路径取后端推荐默认目录，提交时自动建目录）
+   */
+  const prefillDefaultCreate = () => {
+    setAutoCreate(true);
+    form.setFieldsValue({ name: '默认工作区', approvalMode: 'MANUAL' });
+    api.workspace
+      .defaultPath()
+      .then((path) => {
+        if (path) {
+          form.setFieldsValue({ rootPath: path });
+        }
+      })
+      .catch(() => undefined);
+  };
+
   // 弹窗打开时按预置动作初始化表单
   useEffect(() => {
     if (!open) {
@@ -102,8 +118,7 @@ export const WorkspaceManageModal: React.FC<WorkspaceManageModalProps> = ({
     form.resetFields();
     setEditingId(undefined);
     if (initialAction === 'default-create') {
-      setAutoCreate(true);
-      form.setFieldsValue({ name: '默认工作区', approvalMode: 'MANUAL' });
+      prefillDefaultCreate();
     } else {
       setAutoCreate(false);
     }
@@ -114,15 +129,6 @@ export const WorkspaceManageModal: React.FC<WorkspaceManageModalProps> = ({
     form.resetFields();
     setEditingId(undefined);
     setAutoCreate(false);
-  };
-
-  /**
-   * 预填默认目录创建表单（路径由用户按本机主目录补全，提交时自动建目录）
-   */
-  const openDefaultCreate = () => {
-    resetForm();
-    setAutoCreate(true);
-    form.setFieldsValue({ name: '默认工作区', approvalMode: 'MANUAL' });
   };
 
   const handleEdit = (record: WorkspaceItem) => {
@@ -317,9 +323,9 @@ export const WorkspaceManageModal: React.FC<WorkspaceManageModalProps> = ({
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <Button
             icon={<ThunderboltOutlined />}
-            onClick={openDefaultCreate}
+            onClick={() => void prefillDefaultCreate()}
             disabled={Boolean(editingId)}
-            title="预填默认目录创建表单，路径按本机用户主目录填写"
+            title="预填默认工作区表单并自动填充推荐目录路径"
           >
             一键创建默认目录
           </Button>

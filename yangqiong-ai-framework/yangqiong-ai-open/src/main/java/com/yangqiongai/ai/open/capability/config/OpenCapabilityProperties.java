@@ -40,6 +40,11 @@ public class OpenCapabilityProperties {
      */
     private long dataContextDefaultTtlSeconds = 3600;
 
+    /**
+     * URL附件拉取配置
+     */
+    private FileUrlFetch fileUrlFetch = new FileUrlFetch();
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -62,5 +67,84 @@ public class OpenCapabilityProperties {
 
     public void setDataContextDefaultTtlSeconds(long dataContextDefaultTtlSeconds) {
         this.dataContextDefaultTtlSeconds = dataContextDefaultTtlSeconds;
+    }
+
+    public FileUrlFetch getFileUrlFetch() {
+        return fileUrlFetch;
+    }
+
+    public void setFileUrlFetch(FileUrlFetch fileUrlFetch) {
+        this.fileUrlFetch = fileUrlFetch;
+    }
+
+    /**
+     * URL附件拉取配置
+     */
+    public static class FileUrlFetch {
+
+        /**
+         * 单文件大小上限（MB）
+         */
+        private long maxSizeMb = 50;
+
+        /**
+         * 连接超时（毫秒）
+         */
+        private int connectTimeoutMs = 5000;
+
+        /**
+         * 读取超时（毫秒）
+         */
+        private int readTimeoutMs = 30000;
+
+        /**
+         * 最大重定向跳数
+         */
+        private int maxRedirects = 3;
+
+        /**
+         * 允许拉取的内网地址白名单（精确IP/主机名或CIDR网段，用于放行内网MinIO等受信地址）
+         */
+        private java.util.List<String> allowedInternalHosts = new java.util.ArrayList<>();
+
+        public long getMaxSizeMb() {
+            return maxSizeMb;
+        }
+
+        public void setMaxSizeMb(long maxSizeMb) {
+            this.maxSizeMb = maxSizeMb;
+        }
+
+        public int getConnectTimeoutMs() {
+            return connectTimeoutMs;
+        }
+
+        public void setConnectTimeoutMs(int connectTimeoutMs) {
+            this.connectTimeoutMs = connectTimeoutMs;
+        }
+
+        public int getReadTimeoutMs() {
+            return readTimeoutMs;
+        }
+
+        public void setReadTimeoutMs(int readTimeoutMs) {
+            this.readTimeoutMs = readTimeoutMs;
+        }
+
+        public int getMaxRedirects() {
+            return maxRedirects;
+        }
+
+        public void setMaxRedirects(int maxRedirects) {
+            this.maxRedirects = maxRedirects;
+        }
+
+        public java.util.List<String> getAllowedInternalHosts() {
+            return allowedInternalHosts;
+        }
+
+        public void setAllowedInternalHosts(java.util.List<String> allowedInternalHosts) {
+            this.allowedInternalHosts = allowedInternalHosts;
+        }
     }
 }

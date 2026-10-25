@@ -1,4 +1,4 @@
-# 泱穹智能体平台（YangQiong Agent Platform）社区版
+﻿# 泱穹智能体平台（YangQiong Agent Platform）社区版
 
 泱穹智能体平台社区版：一个把"生产级可靠性"当作第一优先级的开源智能体（Agent）开发平台。自研 Agent 引擎 + 工作流编排 + 知识库 RAG + 本地工作台 + 能力开放平台一体化，原生支持审批暂停恢复、澄清追问、检查点断点续跑与成本治理——不是又一个对话 Demo，而是能放心接入业务的智能体底座。
 
@@ -175,6 +175,10 @@ docker compose up -d
 **运行回放 · 步骤时间线** —— LLM / 工具调用序列、输入输出与 Token 消耗
 
 ![步骤时间线](yangqiong-ai-asserts/images/trace-step-timeline.png)
+
+**流程设计 · 工作区节点** —— 画布式多智能体编排，工作区节点支持文件操作计划自动执行
+
+![工作流工作区节点](yangqiong-ai-asserts/images/workflow-workspace-node.png)
 
 ## 开源许可与商业授权
 

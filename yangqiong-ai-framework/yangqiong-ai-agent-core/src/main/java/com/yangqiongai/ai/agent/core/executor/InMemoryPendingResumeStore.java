@@ -16,6 +16,8 @@
  */
 package com.yangqiongai.ai.agent.core.executor;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -44,5 +46,13 @@ public class InMemoryPendingResumeStore implements PendingResumeStore {
     @Override
     public boolean exists(String requestId) {
         return registry.containsKey(requestId);
+    }
+
+    @Override
+    public List<PendingResumeEntry> listActive() {
+        Instant now = Instant.now();
+        return registry.values().stream()
+                .filter(entry -> entry.getExpireTime() == null || entry.getExpireTime().isAfter(now))
+                .toList();
     }
 }

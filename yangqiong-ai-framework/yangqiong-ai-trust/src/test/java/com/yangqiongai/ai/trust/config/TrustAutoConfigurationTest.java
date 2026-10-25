@@ -16,14 +16,12 @@
  */
 package com.yangqiongai.ai.trust.config;
 
-import com.yangqiongai.ai.trust.credential.OpenCredentialService;
-import com.yangqiongai.ai.trust.credential.mapper.OpenCredentialMapper;
+import com.yangqiongai.ai.trust.identity.AgentIdentityService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -36,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("TrustAutoConfiguration条件装配单元测试")
 class TrustAutoConfigurationTest {
 
-    private final WebApplicationContextRunner runner = new WebApplicationContextRunner()
+    private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(TrustAutoConfiguration.class))
             .withUserConfiguration(DependencyConfig.class);
 
@@ -45,11 +43,6 @@ class TrustAutoConfigurationTest {
      */
     @Configuration(proxyBeanMethods = false)
     static class DependencyConfig {
-
-        @Bean
-        public OpenCredentialMapper openCredentialMapper() {
-            return Mockito.mock(OpenCredentialMapper.class);
-        }
 
         @Bean
         public com.yangqiongai.ai.trust.identity.mapper.AgentIdentityMapper agentIdentityMapper() {
@@ -78,21 +71,12 @@ class TrustAutoConfigurationTest {
     }
 
     @Test
-    @DisplayName("默认装配凭证服务且REST控制器已收回,鉴权过滤器不注册")
-    void defaultAssemblyShouldRegisterServiceWithoutFilter() {
+    @DisplayName("默认装配身份/权限画像/动作审计服务,开放凭证不再属于社区版")
+    void defaultAssemblyShouldRegisterIdentityAndAudit() {
         runner.run(context -> {
-            assertThat(context).hasSingleBean(OpenCredentialService.class);
-            assertThat(context).doesNotHaveBean(FilterRegistrationBean.class);
-        });
-    }
-
-    @Test
-    @DisplayName("开启开关后全局注册凭证鉴权过滤器")
-    void enabledPropertyShouldRegisterFilter() {
-        runner.withPropertyValues("ai.trust.credential.enabled=true").run(context -> {
-            assertThat(context).hasSingleBean(OpenCredentialService.class);
-            assertThat(context).getBean("apiKeyAuthenticationFilter")
-                    .isInstanceOf(FilterRegistrationBean.class);
+            assertThat(context).hasSingleBean(AgentIdentityService.class);
+            assertThat(context).hasSingleBean(com.yangqiongai.ai.trust.audit.ActionAuditService.class);
+            assertThat(context).hasSingleBean(com.yangqiongai.ai.trust.profile.PermissionProfileService.class);
         });
     }
 
@@ -100,19 +84,19 @@ class TrustAutoConfigurationTest {
     @DisplayName("ai.trust.enabled=false时不装配任何组件")
     void disabledTrustShouldAssembleNothing() {
         runner.withPropertyValues("ai.trust.enabled=false").run(context -> {
-            assertThat(context).doesNotHaveBean(OpenCredentialService.class);
-            assertThat(context).doesNotHaveBean(FilterRegistrationBean.class);
+            assertThat(context).doesNotHaveBean(AgentIdentityService.class);
+            assertThat(context).doesNotHaveBean(com.yangqiongai.ai.trust.audit.ActionAuditService.class);
         });
     }
 
     @Test
     @DisplayName("已有自定义服务bean时不重复装配")
     void customServiceShouldTakePrecedence() {
-        OpenCredentialService custom = Mockito.mock(OpenCredentialService.class);
-        runner.withBean("customService", OpenCredentialService.class, () -> custom)
+        AgentIdentityService custom = Mockito.mock(AgentIdentityService.class);
+        runner.withBean("customIdentityService", AgentIdentityService.class, () -> custom)
                 .run(context -> {
-                    assertThat(context).hasSingleBean(OpenCredentialService.class);
-                    assertThat(context.getBean(OpenCredentialService.class)).isSameAs(custom);
+                    assertThat(context).hasSingleBean(AgentIdentityService.class);
+                    assertThat(context.getBean(AgentIdentityService.class)).isSameAs(custom);
                 });
     }
 }

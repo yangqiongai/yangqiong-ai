@@ -21,6 +21,12 @@
             <artifactId>yangqiong-ai-agent-core</artifactId>
         </dependency>
 
+        <!-- 审批门控（关闭交互语义的审批兜底自动拒绝） -->
+        <dependency>
+            <groupId>com.yangqiongai.ai</groupId>
+            <artifactId>yangqiong-ai-approval</artifactId>
+        </dependency>
+
         <!-- 工作流引擎（能力可绑定工作流执行体） -->
         <dependency>
             <groupId>com.yangqiongai.ai</groupId>

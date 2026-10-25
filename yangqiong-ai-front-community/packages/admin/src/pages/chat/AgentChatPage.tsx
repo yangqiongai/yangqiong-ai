@@ -45,6 +45,7 @@ import {
   ImagePreviewStrip,
   collapseFileRefs,
   copyToClipboard,
+  emitAgentPendingHandled,
   parseAgentConfig,
   restoreMessagesFromExport,
   useAgentChat,
@@ -244,18 +245,35 @@ export const AgentChatPage: React.FC = () => {
     }
   };
 
-  // 页面打开后默认恢复最近一个话题（仅首次数据加载后执行一次，且不打断正在进行的对话）
+  // 页面打开后默认恢复最近一个话题（仅首次数据加载后执行一次，且不打断正在进行的对话；外部指定sessionId时让位）
   useEffect(() => {
     if (autoRestoredRef.current || !sessionData) {
       return;
     }
     autoRestoredRef.current = true;
+    const gotoSession = new URLSearchParams(window.location.search).get('sessionId');
     const latest = topics[0];
-    if (latest && !sessionId && messages.length === 0) {
+    if (latest && !sessionId && messages.length === 0 && !gotoSession) {
       void restoreSession(latest);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionData]);
+
+  // 外部跳转（如全局通知"去处理"）携带sessionId时恢复对应会话，在对话框内完成审批/澄清作答
+  useEffect(() => {
+    const target = new URLSearchParams(window.location.search).get('sessionId');
+    if (!target || sending) {
+      return;
+    }
+    void (async () => {
+      // 从话题列表补齐agentCode，恢复后Agent选择器对齐来源会话
+      const known = topics.find((t) => t.sessionId === target);
+      await restoreSession(known ?? { sessionId: target });
+      // 恢复完成后再清除URL参数，保证自动恢复effect在整个恢复期间都能看到外部指定的sessionId
+      window.history.replaceState(null, '', window.location.pathname);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sending]);
 
   const handleSend = async () => {
     const content = input.trim();
@@ -325,8 +343,9 @@ export const AgentChatPage: React.FC = () => {
       );
     });
     setClarificationSubmitting(false);
-    // 已回答的提问从卡片列表移除
+    // 已回答的提问从卡片列表移除，并广播处理完成供全局通知卡片同步移除
     setClarifications((prev) => prev.filter((c) => c.toolCallId !== toolCallId));
+    emitAgentPendingHandled({ sessionId, taskType: 'CLARIFICATION', toolCallId });
     queryClient.invalidateQueries({ queryKey: ['chat-sessions'] });
   };
 
@@ -352,8 +371,9 @@ export const AgentChatPage: React.FC = () => {
       );
     });
     setConfirmSubmitting(false);
-    // 已处理的确认从卡片列表移除
+    // 已处理的确认从卡片列表移除，并广播处理完成供全局通知卡片同步移除
     setConfirms((prev) => prev.filter((c) => c.requestId !== requestId));
+    emitAgentPendingHandled({ sessionId, taskType: 'CONFIRM', requestId });
     queryClient.invalidateQueries({ queryKey: ['chat-sessions'] });
   };
 

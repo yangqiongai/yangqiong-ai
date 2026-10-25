@@ -51,6 +51,11 @@ public class ApprovalRequiredEvent extends ApplicationEvent {
     private final String inputSchema;
 
     /**
+     * 关联的任务ID（可选，开放接口交互场景用于定位挂起任务）
+     */
+    private String taskId;
+
+    /**
      * @param source
      * @param requestId
      * @param sessionId
@@ -107,11 +112,20 @@ public class ApprovalRequiredEvent extends ApplicationEvent {
         return inputSchema;
     }
 
+    public String getTaskId() {
+        return taskId;
+    }
+
+    public void setTaskId(String taskId) {
+        this.taskId = taskId;
+    }
+
     /**
      * 转换为SSE推送的JSON格式payload
      */
     public String toPayload() {
         return "{\"requestId\":\"" + escapeJson(requestId) + "\","
+                + "\"taskId\":\"" + escapeJson(taskId != null ? taskId : "") + "\","
                 + "\"sessionId\":\"" + escapeJson(sessionId) + "\","
                 + "\"userId\":\"" + escapeJson(userId != null ? userId : "") + "\","
                 + "\"resourceType\":\"" + escapeJson(resourceType != null ? resourceType : "") + "\","

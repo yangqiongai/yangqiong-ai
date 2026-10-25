@@ -27,6 +27,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * JDBC暂停恢复登记存储
@@ -69,6 +71,11 @@ public class JdbcPendingResumeStore implements PendingResumeStore {
     private static final String EXISTS_SQL =
             "SELECT COUNT(1) FROM ai_agent_pending_resume "
                     + "WHERE request_id = ? AND status = ? AND expire_time > NOW()";
+
+    private static final String LIST_ACTIVE_SQL =
+            "SELECT request_id, session_id, tool_call_id, scope_id, run_id, agent_code, resume_type, "
+                    + "user_id, node_id, pending_data, request_data, status, expire_time, create_time "
+                    + "FROM ai_agent_pending_resume WHERE status = ? AND expire_time > NOW()";
 
     private static final String EXPIRE_SQL =
             "UPDATE ai_agent_pending_resume SET status = ?, update_time = NOW() "
@@ -146,6 +153,24 @@ public class JdbcPendingResumeStore implements PendingResumeStore {
         } catch (SQLException e) {
             log.warn("暂停恢复登记查询失败: requestId={}", requestId, e);
             return false;
+        }
+    }
+
+    @Override
+    public List<PendingResumeEntry> listActive() {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(LIST_ACTIVE_SQL)) {
+            statement.setString(1, STATUS_PENDING);
+            try (ResultSet rs = statement.executeQuery()) {
+                List<PendingResumeEntry> entries = new ArrayList<>();
+                while (rs.next()) {
+                    entries.add(mapRow(rs));
+                }
+                return entries;
+            }
+        } catch (SQLException e) {
+            log.warn("暂停恢复登记枚举失败", e);
+            return List.of();
         }
     }
 

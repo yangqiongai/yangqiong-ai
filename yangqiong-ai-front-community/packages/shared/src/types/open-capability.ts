@@ -45,6 +45,7 @@ export interface CapabilitySpec {
   contract?: Record<string, unknown>;
   context?: Record<string, unknown>;
   audit?: Record<string, unknown>;
+  interactionEnabled?: boolean;
 }
 
 /**
@@ -124,4 +125,33 @@ export interface CapabilityResponse {
   callId?: string;
   tokenMetrics?: Record<string, unknown>;
   durationMillis?: number;
+}
+
+/**
+ * 能力调试步骤结果
+ * 对应后端 CapabilityDebugResponse.DebugStep
+ */
+export interface CapabilityDebugStep {
+  passed: boolean;
+  message?: string;
+  errors?: string[];
+}
+
+/**
+ * 能力调试执行响应
+ * 对应后端 com.maizi.ai.open.capability.engine.CapabilityDebugResponse
+ * 分步返回调用全流程中间结果（入参校验 → Prompt渲染 → Agent执行 → 契约校验）
+ */
+export interface CapabilityDebugResponse {
+  success: boolean;
+  errorMessage?: string;
+  callId?: string;
+  durationMillis?: number;
+  inputValidation?: CapabilityDebugStep;
+  renderedPrompt?: string;
+  agentExecution?: CapabilityDebugStep;
+  agentOutput?: string;
+  outputContract?: CapabilityDebugStep;
+  structuredOutput?: unknown;
+  tokenMetrics?: Record<string, unknown>;
 }

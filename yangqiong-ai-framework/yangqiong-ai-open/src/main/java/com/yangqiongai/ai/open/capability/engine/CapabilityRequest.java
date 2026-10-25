@@ -22,7 +22,8 @@ import java.util.Map;
 /**
  * 能力调用请求
  * <p>
- * 统一的开放API请求格式，业务系统只需传capability/dataContextRefs/arguments。
+ * 统一的开放API请求格式，业务系统只需传capability/dataContextRefs/arguments，
+ * 作用域由服务端凭证绑定上下文决定，不接受调用方传参。
  * </p>
  * @author yangqiong
  */
@@ -52,11 +53,6 @@ public class CapabilityRequest {
      * 调用方标识
      */
     private String caller;
-
-    /**
-     * 调用方作用域ID
-     */
-    private String scopeId;
 
     public String getCapability() {
         return capability;
@@ -96,13 +92,5 @@ public class CapabilityRequest {
 
     public void setCaller(String caller) {
         this.caller = caller;
-    }
-
-    public String getScopeId() {
-        return scopeId;
-    }
-
-    public void setScopeId(String scopeId) {
-        this.scopeId = scopeId;
     }
 }

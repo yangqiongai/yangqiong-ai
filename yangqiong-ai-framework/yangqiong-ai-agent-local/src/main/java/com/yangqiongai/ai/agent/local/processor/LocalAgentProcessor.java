@@ -20,6 +20,7 @@ import com.yangqiongai.ai.agent.core.model.request.AgentRequest;
 import com.yangqiongai.ai.agent.core.model.content.ContentBlockConverter;
 import com.yangqiongai.ai.agent.core.model.content.InputBlock;
 import com.yangqiongai.ai.agent.core.processor.AbstractAgentProcessor;
+import com.yangqiongai.ai.agent.core.task.StepRecordingManager;
 import com.yangqiongai.ai.agent.local.model.WorkspaceInfo;
 import com.yangqiongai.ai.agent.local.workspace.UserWorkspaceService;
 import com.yangqiongai.ai.agent.local.workspace.WorkspaceApprovalPolicyGate;
@@ -92,6 +93,16 @@ public class LocalAgentProcessor extends AbstractAgentProcessor {
      * 请求级工作区参数键（复用_前缀保留字段机制，仅对localAgent生效）
      */
     private static final String BODY_KEY_WORKSPACE_ID = "_workspaceId";
+
+    /**
+     * 请求级审批放行参数键（节点私有参数透传）：auto=同步执行自动放行写删操作（默认），workspace=保持工作区审批层级
+     */
+    private static final String BODY_KEY_APPROVAL_BYPASS = "_approvalBypass";
+
+    /**
+     * 审批放行参数取值：保持工作区审批层级
+     */
+    private static final String APPROVAL_BYPASS_WORKSPACE = "workspace";
 
     /**
      * 请求级运行ID参数键（引擎运行链路注入body，经工作区引用透传供执行端审计关联）
@@ -170,7 +181,9 @@ public class LocalAgentProcessor extends AbstractAgentProcessor {
         builder.modelRetryConfig(AgentModelRetryConfig.defaultEnabled());
         builder.maxIters(getMaxIterations());
         // 开启ask_user工具：模型缺信息时主动向用户提问，前端弹出澄清卡片提交答案后续跑
-        builder.askUserEnabled(true);
+        // 同步执行（工作流节点/同步API）无人工交互通道，澄清暂停无法续跑会导致节点以异常失败，
+        // 禁用后模型直接将待决策事项如实汇总到最终回复
+        builder.askUserEnabled(!StepRecordingManager.isSyncExecution(request));
         WorkspaceInfo workspace = resolveWorkspace(request);
         if (workspace != null) {
             // 虚拟根（连接器/浏览器桥）文件操作经网关ws.fs.*工具执行，不绑定引擎本地文件沙箱
@@ -180,9 +193,17 @@ public class LocalAgentProcessor extends AbstractAgentProcessor {
                 builder.fileToolsEnabled(true);
             }
             AgentApprovalMode approvalMode = AgentApprovalMode.valueOf(workspace.getApprovalMode());
-            builder.approvalMode(approvalMode);
+            // 同步执行（工作流节点/同步API）无人工交互通道，MANUAL/CUSTOM/AUTO层级的写删类ASK暂停无法续跑
+            // 会导致节点以异常失败；节点未显式要求保持工作区审批层级时降级FULL_ACCESS自动放行，
+            // 异步会话链路与workspace放行参数下均保持工作区原审批层级
+            boolean degradeApproval = StepRecordingManager.isSyncExecution(request) && !keepWorkspaceApproval(request);
+            if (degradeApproval) {
+                builder.approvalMode(AgentApprovalMode.FULL_ACCESS);
+            } else {
+                builder.approvalMode(approvalMode);
+            }
             // AUTO模式复用主模型作为审批裁判（与本地Harness装配一致），未解析到模型时由引擎build校验兜底
-            if (approvalMode == AgentApprovalMode.AUTO) {
+            if (!degradeApproval && approvalMode == AgentApprovalMode.AUTO) {
                 String modelCode = agentBootstrapService.resolveModelCode(request);
                 if (modelCode != null && !modelCode.isBlank() && agentModelFactory != null) {
                     builder.approvalJudgeModel(agentModelFactory.getModel(modelCode, null));
@@ -191,8 +212,10 @@ public class LocalAgentProcessor extends AbstractAgentProcessor {
                 builder.requireApproval(Set.of("file_delete", "ws.fs.delete"));
             }
             // 引擎审批实现方式：策略门交引擎triage裁决（写删类ASK暂停等人工确认），工具内框架审批门放行避免双重审批
+            // 同步降级时策略门按FULL_ACCESS放行，与引擎审批模式降级保持一致
             if ("engine".equalsIgnoreCase(workspaceProperties.getApprovalEngine())) {
-                builder.toolPolicyGate(new WorkspaceApprovalPolicyGate(workspace.getApprovalMode()));
+                builder.toolPolicyGate(new WorkspaceApprovalPolicyGate(
+                        degradeApproval ? AgentApprovalMode.FULL_ACCESS.name() : workspace.getApprovalMode()));
             }
             // 工具调用超时放长到10分钟：MANUAL审批层级下写删工具需等待人工批准（审批等待上限5分钟）
             builder.toolCallTimeout(java.time.Duration.ofMinutes(10));
@@ -227,6 +250,17 @@ public class LocalAgentProcessor extends AbstractAgentProcessor {
                     + "文件路径请使用相对工作区根的相对路径。\n";
         }
         return prompt;
+    }
+
+    /**
+     * 是否保持工作区审批层级（节点参数_approvalBypass=workspace时为true，缺省auto放行）
+     * @param request
+     * @return
+     */
+    static boolean keepWorkspaceApproval(AgentRequest request) {
+        Object bypass = request == null || request.getBody() == null
+                ? null : request.getBody().get(BODY_KEY_APPROVAL_BYPASS);
+        return bypass != null && APPROVAL_BYPASS_WORKSPACE.equalsIgnoreCase(bypass.toString().trim());
     }
 
     /**
@@ -277,8 +311,10 @@ public class LocalAgentProcessor extends AbstractAgentProcessor {
             // 运行ID透传：连接器/浏览器桥执行端据以审计关联Agent运行（非引擎运行链路为空）
             ref.setRunId(resolveRunId(request));
             WorkspaceGateway gateway = workspaceGatewayRouter.route(ref.getType());
-            // 引擎审批模式下工具内框架审批门放行（人工确认已由引擎triage暂停完成）
-            boolean engineApproval = "engine".equalsIgnoreCase(workspaceProperties.getApprovalEngine());
+            // 引擎审批模式下工具内框架审批门放行（人工确认已由引擎triage暂停完成）；
+            // 同步降级放行场景工具内门同步放行，避免阻塞等待审批导致节点挂起
+            boolean engineApproval = "engine".equalsIgnoreCase(workspaceProperties.getApprovalEngine())
+                    || (StepRecordingManager.isSyncExecution(request) && !keepWorkspaceApproval(request));
             ApprovalGate toolApprovalGate = engineApproval ? new EngineModeApprovalGate() : approvalGate;
             WorkspaceFileTools.registerTo(toolkit, ref, gateway, workspace.getApprovalMode(),
                     request.getSessionId(), request.getUserId(), toolApprovalGate);

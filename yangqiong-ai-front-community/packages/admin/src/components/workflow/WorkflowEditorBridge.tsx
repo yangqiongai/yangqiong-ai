@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { App } from 'vue';
 import '@yq/workflow/style.css';
-import type { WorkflowDefinition, WorkflowEditorExecutionApi } from '@yq/workflow';
+import type { WorkflowDefinition, WorkflowEditorExecutionApi, WorkflowAgentPreset, AgentPresetActionPayload } from '@yq/workflow';
 /**
  * 编辑器桥接属性
  */
@@ -26,18 +26,25 @@ export interface WorkflowEditorBridgeProps {
   readonly?: boolean;
   /** 流程显示名称（中文名），导出文件命名优先使用 */
   displayName?: string;
-  /** 是否启用企业版专属能力（审批节点等），社区版传 false 时编辑器置灰 */
+  /** 是否启用专属能力（审批节点等）*/
   enterpriseFeatures?: boolean;
   /** Agent 下拉选项（已注册的 Agent 列表），供画布 Agent 节点配置选择 */
   agentOptions?: Array<{ code: string; name: string }>;
+  /** Agent 节点预设模板（宿主按需注入，未注入时不渲染预设UI） */
+  agentPresets?: WorkflowAgentPreset[];
+  /** 预设动作按钮点击回调（语义由宿主实现） */
+  onPresetAction?: (payload: AgentPresetActionPayload) => void;
   /** 集成渠道下拉选项，供通知节点配置选择 */
   channelOptions?: Array<{ id: string; name: string; type?: string }>;
+  /** 工作区下拉选项（仅服务端存储型），供本地节点等定制节点配置选择 */
+  workspaceOptions?: Array<{ id: string; name: string }>;
   /** 编辑器挂载后回传执行进度控制API，供宿主实时驱动画布节点与路径样式 */
   registerApi?: (api: WorkflowEditorExecutionApi) => void;
   onSave?: (definition: WorkflowDefinition) => void;
+  onSaveAsVersion?: (definition: WorkflowDefinition) => void;
   onExecute?: (definition: WorkflowDefinition) => void;
   onUpdate?: (definition: WorkflowDefinition) => void;
-  /** 暂停执行（企业版专属能力） */
+  /** 暂停执行（专属能力） */
   onPause?: () => void;
   /** 从暂停位置恢复执行 */
   onResume?: () => void;
@@ -54,9 +61,13 @@ export const WorkflowEditorBridge: React.FC<WorkflowEditorBridgeProps> = ({
   displayName,
   enterpriseFeatures,
   agentOptions,
+  agentPresets,
+  onPresetAction,
   channelOptions,
+  workspaceOptions,
   registerApi,
   onSave,
+  onSaveAsVersion,
   onExecute,
   onUpdate,
   onPause,
@@ -69,10 +80,13 @@ export const WorkflowEditorBridge: React.FC<WorkflowEditorBridgeProps> = ({
   // registerApi 用ref透传，避免挂载参数随渲染变化重建Vue实例
   const registerApiRef = useRef(registerApi);
   registerApiRef.current = registerApi;
+  // 预设动作回调同样ref透传，避免随渲染变化重建Vue实例
+  const presetActionRef = useRef(onPresetAction);
+  presetActionRef.current = onPresetAction;
   // 已渲染到画布的定义（整包替换时据此识别，触发Vue实例重建）
   const renderedDefinitionRef = useRef<WorkflowDefinition | null>(null);
   // 最新宿主属性，重建Vue实例时使用最新值
-  const latestPropsRef = useRef({ definition, displayName, agentOptions, channelOptions });
+  const latestPropsRef = useRef({ definition, displayName, agentOptions, agentPresets, channelOptions, workspaceOptions });
 
   /**
    * 创建Vue编辑器实例并挂载（首次挂载与外部整包替换定义时均调用）
@@ -94,10 +108,14 @@ export const WorkflowEditorBridge: React.FC<WorkflowEditorBridgeProps> = ({
       displayName: latest.displayName ?? '',
       enterpriseFeatures: enterpriseFeatures !== false,
       agentOptions: latest.agentOptions ?? [],
+      agentPresets: latest.agentPresets ?? [],
       channelOptions: latest.channelOptions ?? [],
+      workspaceOptions: latest.workspaceOptions ?? [],
       registerApi: (api: WorkflowEditorExecutionApi) => registerApiRef.current?.(api),
       onSave: (value: WorkflowDefinition) => onSave?.(value),
+      onSaveAsVersion: (value: WorkflowDefinition) => onSaveAsVersion?.(value),
       onExecute: (value: WorkflowDefinition) => onExecute?.(value),
+      onPresetAction: (payload: AgentPresetActionPayload) => presetActionRef.current?.(payload),
       'onUpdate:modelValue': (value: WorkflowDefinition) => onUpdate?.(value),
       onPause: () => onPause?.(),
       onResume: () => onResume?.(),
@@ -125,11 +143,11 @@ export const WorkflowEditorBridge: React.FC<WorkflowEditorBridgeProps> = ({
 
   // 外部definition被整包替换（如AI生成定义应用到画布）时，直接修改根组件props不生效，重建Vue实例刷新画布
   useEffect(() => {
-    latestPropsRef.current = { definition, displayName, agentOptions, channelOptions };
+    latestPropsRef.current = { definition, displayName, agentOptions, agentPresets, channelOptions, workspaceOptions };
     if (!appRef.current) return;
     if (renderedDefinitionRef.current === definition) return;
     void mountVueApp();
-  }, [definition, displayName, agentOptions, channelOptions]);
+  }, [definition, displayName, agentOptions, agentPresets, channelOptions, workspaceOptions]);
 
   return (
     <div

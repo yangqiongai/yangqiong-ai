@@ -25,7 +25,6 @@ import { AgentTriggerBasePage } from '@/pages/trigger/AgentTriggerBasePage';
 import { IntegrationRecordPage } from '@/pages/integration/IntegrationRecordPage';
 import { ChannelConfigPage } from '@/pages/integration/ChannelConfigPage';
 import { AlertRulePage } from '@/pages/integration/AlertRulePage';
-import { ConnectorPage } from '@/pages/connector/ConnectorPage';
 import type { RouteItem } from '@/routes/app-plugin';
 
 /**
@@ -97,11 +96,5 @@ export const mgmtRoutes: RouteItem[] = [
     key: 'integration-alert-rules',
     label: '告警规则',
     element: <AlertRulePage />,
-  },
-  {
-    path: '/connectors',
-    key: 'connectors',
-    label: '连接器',
-    element: <ConnectorPage />,
   },
 ];

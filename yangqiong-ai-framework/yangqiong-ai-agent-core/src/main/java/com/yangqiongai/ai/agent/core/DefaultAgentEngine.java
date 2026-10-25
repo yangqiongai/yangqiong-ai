@@ -43,6 +43,7 @@ import com.yangqiongai.ai.agent.core.executor.PendingResumeEntry;
 import com.yangqiongai.ai.agent.core.executor.ReActAgentExecutor;
 import com.yangqiongai.ai.agent.runtime.event.ClarificationAnswer;
 import com.yangqiongai.ai.agent.runtime.event.ConfirmResult;
+import com.yangqiongai.ai.agent.core.session.ConversationBridge;
 import com.yangqiongai.ai.common.sse.StreamEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,6 +75,12 @@ public class DefaultAgentEngine implements AgentEngine {
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
+
+    /**
+     * 会话桥（恢复续跑的用户作答落库用，未装配时静默跳过）
+     */
+    @Autowired(required = false)
+    private ConversationBridge conversationBridge;
 
     private final Map<String, AgentProcessor> processorMap = new ConcurrentHashMap<>();
 
@@ -113,7 +120,7 @@ public class DefaultAgentEngine implements AgentEngine {
                 SessionContext.getScopeId(), request.getSessionId(), request.getUserId());
         AgentProcessor processor = resolveProcessor(request.getAgentCode());
         // 标记执行模式（供 StepRecordingManager 判断来源）
-        request.addBody("_internalExecutionMode", "sync");
+        request.addBody(StepRecordingManager.INTERNAL_EXECUTION_MODE, "sync");
         AgentContext context = processor.createAgentContext(request);
         long startTime = System.currentTimeMillis();
         try {
@@ -164,7 +171,7 @@ public class DefaultAgentEngine implements AgentEngine {
                 SessionContext.getScopeId(), request.getSessionId(), request.getUserId());
         AgentProcessor processor = resolveProcessor(request.getAgentCode());
         // 标记执行模式（供 StepRecordingManager 判断来源）
-        request.addBody("_internalExecutionMode", "stream");
+        request.addBody(StepRecordingManager.INTERNAL_EXECUTION_MODE, "stream");
         AgentContext context = processor.createAgentContext(request);
         long startTime = System.currentTimeMillis();
         // doFinally仅有信号类型拿不到异常，用doOnError先捕获供失败收尾还原原因
@@ -205,6 +212,8 @@ public class DefaultAgentEngine implements AgentEngine {
         log.info("恢复澄清续跑: sessionId={}, toolCallId={}", sessionId, toolCallId);
         ClarificationResumeHandle handle = entry.getClarificationHandle();
         if (handle != null) {
+            // 用户澄清答案先落库为本轮对话的用户消息（置于syncScopeContext前，避免落库clear清掉续跑线程scope绑定）
+            persistResumeUserAnswer(handle.getAgentContext(), answer);
             // 同节点：复用暂停现场句柄续跑
             // 恢复线程重建scope上下文（复用暂停请求的scope信息），续跑装配与模型调用依赖
             syncScopeContext(handle.getAgentContext().getRequest());
@@ -225,10 +234,12 @@ public class DefaultAgentEngine implements AgentEngine {
     private Flux<StreamEvent> resumeClarificationRebuilt(PendingResumeEntry entry, String toolCallId, String answer) {
         try {
             AgentRequest request = OBJECT_MAPPER.readValue(entry.getRequestData(), AgentRequest.class);
-            // 恢复线程重建scope上下文，续跑装配与模型调用依赖
-            syncScopeContext(request);
             AgentProcessor processor = resolveProcessor(entry.getAgentCode());
             AgentContext context = processor.createAgentContext(request);
+            // 用户澄清答案落库为本轮对话的用户消息（置于syncScopeContext前，避免落库clear清掉续跑线程scope绑定）
+            persistResumeUserAnswer(context, answer);
+            // 恢复线程重建scope上下文，续跑装配与模型调用依赖
+            syncScopeContext(request);
             log.info("跨节点重建澄清现场: sessionId={}, agentCode={}, nodeId={}",
                     entry.getSessionId(), entry.getAgentCode(), entry.getNodeId());
             return reActAgentExecutor.streamResumeClarificationRebuilt(context,
@@ -262,6 +273,9 @@ public class DefaultAgentEngine implements AgentEngine {
         log.info("恢复引擎确认续跑: sessionId={}, approved={}, operator={}", sessionId, approved, operator);
         ConfirmResumeHandle handle = entry.getConfirmHandle();
         if (handle != null) {
+            // 审批决策先落库为本轮对话的用户消息（置于syncScopeContext前，避免落库clear清掉续跑线程scope绑定）
+            persistResumeUserAnswer(handle.getAgentContext(),
+                    approved ? "批准工具调用" : "拒绝工具调用" + (StringUtils.getOrDefault(reason).isBlank() ? "" : "：" + reason));
             // 同节点：复用暂停现场句柄续跑
             // 待确认清单逐个构建确认结果，批准与拒绝按同一清单对齐
             List<ConfirmResult> confirmResults = handle.getPendingToolCalls().stream()
@@ -288,10 +302,13 @@ public class DefaultAgentEngine implements AgentEngine {
     private Flux<StreamEvent> resumeConfirmRebuilt(PendingResumeEntry entry, boolean approved, String reason) {
         try {
             AgentRequest request = OBJECT_MAPPER.readValue(entry.getRequestData(), AgentRequest.class);
-            // 恢复线程重建scope上下文，续跑装配与模型调用依赖
-            syncScopeContext(request);
             AgentProcessor processor = resolveProcessor(entry.getAgentCode());
             AgentContext context = processor.createAgentContext(request);
+            // 审批决策落库为本轮对话的用户消息（置于syncScopeContext前，避免落库clear清掉续跑线程scope绑定）
+            persistResumeUserAnswer(context,
+                    approved ? "批准工具调用" : "拒绝工具调用" + (StringUtils.getOrDefault(reason).isBlank() ? "" : "：" + reason));
+            // 恢复线程重建scope上下文，续跑装配与模型调用依赖
+            syncScopeContext(request);
             // 登记的待确认工具清单构建确认结果，批准与拒绝按同一清单对齐
             List<Map<String, Object>> pendingTools = entry.getPendingData() != null
                     ? OBJECT_MAPPER.readValue(entry.getPendingData(),
@@ -314,6 +331,23 @@ public class DefaultAgentEngine implements AgentEngine {
             log.error("跨节点重建确认现场失败: sessionId={}", entry.getSessionId(), e);
             return Flux.error(new AiException(AiErrorCode.AGENT_RUNTIME_ERROR,
                     "重建恢复现场失败: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 恢复续跑的用户作答落库（澄清答案或审批决策），会话桥未装配或落库异常时静默跳过
+     * @param context
+     * @param answer
+     */
+    private void persistResumeUserAnswer(AgentContext context, String answer) {
+        if (conversationBridge == null) {
+            return;
+        }
+        try {
+            conversationBridge.persistResumeUserAnswer(context, answer);
+        } catch (Exception e) {
+            log.warn("恢复续跑用户作答落库失败: sessionId={}",
+                    context.getRequest() == null ? "" : StringUtils.getOrDefault(context.getRequest().getSessionId()), e);
         }
     }
 

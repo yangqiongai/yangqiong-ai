@@ -95,6 +95,11 @@ public class AgentTaskRecord {
     private String currentStep;
 
     /**
+     * 进入挂起态的时刻（内存字段，不落库，供挂起态孤儿恢复判定）
+     */
+    private LocalDateTime pendingAt;
+
+    /**
      * 开始时间
      */
     private LocalDateTime startedAt;
@@ -241,6 +246,14 @@ public class AgentTaskRecord {
         this.currentStep = currentStep;
     }
 
+    public LocalDateTime getPendingAt() {
+        return pendingAt;
+    }
+
+    public void setPendingAt(LocalDateTime pendingAt) {
+        this.pendingAt = pendingAt;
+    }
+
     public LocalDateTime getStartedAt() {
         return startedAt;
     }
@@ -306,11 +319,14 @@ public class AgentTaskRecord {
     }
 
     /**
-     * 任务状态枚举（对齐数据库 PENDING/RUNNING/SUCCEEDED/FAILED/CANCELLED）
+     * 任务状态枚举（对齐数据库 PENDING/RUNNING/SUCCEEDED/FAILED/CANCELLED，
+     * 挂起态为开放接口交互增强新增，表示任务等待外部澄清答复或审批处理，非终态）
      */
     public enum TaskStatus {
         PENDING,
         RUNNING,
+        PENDING_CLARIFICATION,
+        PENDING_APPROVAL,
         SUCCEEDED,
         FAILED,
         CANCELLED

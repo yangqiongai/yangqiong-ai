@@ -1,3 +1,20 @@
+<!--
+ * Copyright (C) 2026 yangqiong
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, version 3 of the License
+ * only ("AGPL-3.0-only") and not any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import { getBezierPath, getSmoothStepPath } from '@vue-flow/core'
@@ -36,6 +53,8 @@ const path = computed(() => {
 
 <template>
   <g>
+    <!-- 透明宽路径扩大点击热区，解决连线难以选中的问题 -->
+    <path :d="path[0]" class="wf-edge-hit" fill="none" stroke="transparent" stroke-width="20" />
     <path
       :id="id"
       :d="path[0]"
@@ -51,7 +70,11 @@ const path = computed(() => {
 </template>
 
 <style scoped>
-.wf-edge--parallel:hover {
+.wf-edge-hit {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+g:hover .wf-edge--parallel {
   stroke: #059669;
   stroke-width: 3;
 }

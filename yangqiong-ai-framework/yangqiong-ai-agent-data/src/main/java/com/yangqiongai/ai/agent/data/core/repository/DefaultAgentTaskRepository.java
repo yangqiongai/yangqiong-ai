@@ -182,7 +182,7 @@ public class DefaultAgentTaskRepository implements AgentTaskRepository {
         if (!persistenceEnabled) return 0;
         try {
             LambdaQueryWrapper<AgentTaskEntity> wrapper = new LambdaQueryWrapper<>();
-            wrapper.in(AgentTaskEntity::getTaskStatus, "PENDING", "RUNNING");
+            wrapper.in(AgentTaskEntity::getTaskStatus, "PENDING", "RUNNING", "PENDING_CLARIFICATION", "PENDING_APPROVAL");
             List<AgentTaskEntity> pendingTasks = agentTaskMapper.selectList(wrapper);
             int count = 0;
             for (AgentTaskEntity task : pendingTasks) {

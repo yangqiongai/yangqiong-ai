@@ -20,6 +20,7 @@ import type {
   CapabilityCategory,
   CapabilityCategoryNode,
   CapabilityDefinitionHistory,
+  CapabilityDebugResponse,
   PageQuery,
   PageResult,
 } from '../types';
@@ -33,6 +34,8 @@ export const createOpenCapabilityApi = (http: HttpRequest) => ({
   update: (code: string, data: Partial<CapabilitySpec>) =>
     http.put<CapabilitySpec>(`/api/open-capability/${code}`, data),
   delete: (code: string) => http.delete<void>(`/api/open-capability/${code}`),
+  debug: (code: string, arguments_: Record<string, unknown>) =>
+    http.post<CapabilityDebugResponse>(`/api/open-capability/${code}/debug`, arguments_),
   history: (code: string) =>
     http.get<CapabilityDefinitionHistory[]>(`/api/open-capability/${code}/history`),
   historyDetail: (code: string, historyId: number) =>

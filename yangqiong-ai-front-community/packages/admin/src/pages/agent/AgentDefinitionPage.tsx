@@ -254,6 +254,13 @@ const AgentConfigFormItems: React.FC<{
           <Form.Item name={nameOf('maxIterations')} label="最大迭代次数" extra="留空使用处理器默认值">
             <InputNumber min={1} max={100} style={{ width: 200 }} disabled={disabled} />
           </Form.Item>
+          <Form.Item
+            name={nameOf('maxContextTokens')}
+            label="上下文Token上限"
+            extra="留空不启用；超出时按截断策略裁剪历史消息，系统提示词始终保留"
+          >
+            <InputNumber min={0} max={2000000} style={{ width: 200 }} disabled={disabled} />
+          </Form.Item>
           <Form.Item noStyle shouldUpdate>
             {({ getFieldValue }) => {
               // 所选模型不支持推理时，推理相关配置整体禁用

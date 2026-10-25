@@ -187,6 +187,21 @@ public class UserWorkspaceService {
     }
 
     /**
+     * 推荐的默认工作区目录（白名单非空时取第一个存在的白名单根，否则取用户主目录下的 yangqiong-workspace）
+     * @return
+     */
+    public String defaultPath() {
+        checkEnabled();
+        for (String root : workspaceProperties.getRoots()) {
+            String canonicalRoot = WorkspacePathUtils.canonical(root);
+            if (canonicalRoot != null) {
+                return canonicalRoot;
+            }
+        }
+        return Paths.get(System.getProperty("user.home"), "yangqiong-workspace").toString().replace('\\', '/');
+    }
+
+    /**
      * 取路径末段目录名（server://展示格式用，不含任何父路径信息）
      * @param path
      * @return

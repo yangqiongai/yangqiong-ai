@@ -110,6 +110,16 @@ public class AgentHarnessRuntimeFactory implements AgentRuntimeFactory {
      */
     private String nodeId;
 
+    /**
+     * 上下文窗口Token上限（0或不设置时由模型自行决定，不启用截断）
+     */
+    private int maxContextTokens;
+
+    /**
+     * 历史截断策略（null时使用引擎默认TAIL）
+     */
+    private HarnessAgentRuntimeBuilder.TruncationStrategy historyTruncationStrategy;
+
     public AgentHarnessRuntimeFactory() {
         this.delegate = new HarnessRuntimeFactory();
     }
@@ -123,6 +133,12 @@ public class AgentHarnessRuntimeFactory implements AgentRuntimeFactory {
         HarnessRuntimeBuilder harnessBuilder =
                 (HarnessRuntimeBuilder) delegate.createBuilder();
         AgentHarnessRuntimeBuilder builder = new AgentHarnessRuntimeBuilder(harnessBuilder);
+        if (maxContextTokens > 0) {
+            builder.maxContextTokens(maxContextTokens);
+        }
+        if (historyTruncationStrategy != null) {
+            builder.historyTruncationStrategy(historyTruncationStrategy);
+        }
         if (distributedStores != null) {
             builder.stores(distributedStores);
         }
@@ -190,6 +206,23 @@ public class AgentHarnessRuntimeFactory implements AgentRuntimeFactory {
      */
     public void setNodeId(String nodeId) {
         this.nodeId = nodeId;
+    }
+
+    /**
+     * 设置上下文窗口Token上限
+     * @param maxContextTokens 最大Token数，0表示不启用截断
+     */
+    public void setMaxContextTokens(int maxContextTokens) {
+        this.maxContextTokens = maxContextTokens;
+    }
+
+    /**
+     * 设置历史截断策略
+     * @param historyTruncationStrategy 策略枚举，null使用引擎默认
+     */
+    public void setHistoryTruncationStrategy(
+            HarnessAgentRuntimeBuilder.TruncationStrategy historyTruncationStrategy) {
+        this.historyTruncationStrategy = historyTruncationStrategy;
     }
 
     /**

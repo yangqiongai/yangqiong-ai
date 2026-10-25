@@ -323,6 +323,71 @@ class WorkflowAgentExecutorTest {
         }
     }
 
+    // ==================== 2.1 节点私有扩展参数透传 ====================
+
+    @Nested
+    @DisplayName("节点私有扩展参数透传")
+    class NodePrivateParamsPassThrough {
+
+        @Test
+        @DisplayName("AgentNode配置中下划线前缀键透传进请求body，null值不透传")
+        void execute_agentNodeUnderscoreKeys_passedIntoRequestBody() {
+            AgentNode agent = agentNode("agent1", "Agent1");
+            Map<String, Object> config = new HashMap<>();
+            config.put("agentCode", "browser");
+            config.put("_browserEngine", "playwright");
+            config.put("_browserSessionId", "session-001");
+            config.put("_nullParam", null);
+            config.put("normalKey", "not-passthrough");
+            agent.setConfig(config);
+
+            List<WorkflowNode> nodes = List.of(
+                    startNode("start"), agent, endNode("end")
+            );
+            List<WorkflowEdge> edges = List.of(
+                    edge("e1", "start", "agent1"),
+                    edge("e2", "agent1", "end")
+            );
+            WorkflowDefinition definition = buildDefinition(nodes, edges);
+
+            when(agentEngine.run(any(AgentRequest.class)))
+                    .thenReturn(AgentResult.success("ok"));
+
+            workflowExecutor.execute(definition, defaultContext);
+
+            org.mockito.ArgumentCaptor<AgentRequest> captor =
+                    org.mockito.ArgumentCaptor.forClass(AgentRequest.class);
+            verify(agentEngine, times(1)).run(captor.capture());
+            AgentRequest captured = captor.getValue();
+            assertThat(captured.getBody()).isNotNull();
+            assertThat(captured.getBody()).containsEntry("_browserEngine", "playwright");
+            assertThat(captured.getBody()).containsEntry("_browserSessionId", "session-001");
+            assertThat(captured.getBody()).doesNotContainKey("_nullParam");
+            assertThat(captured.getBody()).doesNotContainKey("normalKey");
+        }
+
+        @Test
+        @DisplayName("节点无配置或无下划线键时不影响请求body构建")
+        void execute_agentNodeWithoutPrivateParams_bodyStillBuilt() {
+            List<WorkflowNode> nodes = List.of(
+                    startNode("start"), agentNode("agent1", "Agent1"), endNode("end")
+            );
+            List<WorkflowEdge> edges = List.of(
+                    edge("e1", "start", "agent1"),
+                    edge("e2", "agent1", "end")
+            );
+            WorkflowDefinition definition = buildDefinition(nodes, edges);
+
+            when(agentEngine.run(any(AgentRequest.class)))
+                    .thenReturn(AgentResult.success("ok"));
+
+            AgentResult result = workflowExecutor.execute(definition, defaultContext);
+
+            assertThat(result.isSuccess()).isTrue();
+            verify(agentEngine, times(1)).run(any(AgentRequest.class));
+        }
+    }
+
     // ==================== 3. 错误策略 STOP ====================
 
     @Nested
@@ -762,6 +827,61 @@ class WorkflowAgentExecutorTest {
             assertThat(result.isSuccess()).isTrue();
             verify(stateStore, never()).save(any());
         }
+
+        @Test
+        @DisplayName("存储故障时节点全部成功，执行结果不被持久化失败污染为FAILED")
+        void execute_persistFailure_nodesAllSucceed_resultRemainsCompleted() {
+            List<WorkflowNode> nodes = List.of(
+                    startNode("start"), agentNode("agent1", "Agent1"), endNode("end")
+            );
+            List<WorkflowEdge> edges = List.of(
+                    edge("e1", "start", "agent1"),
+                    edge("e2", "agent1", "end")
+            );
+            WorkflowDefinition definition = buildDefinition(nodes, edges);
+
+            when(agentEngine.run(any(AgentRequest.class)))
+                    .thenReturn(AgentResult.success("存储故障输出"));
+            doThrow(new RuntimeException("Redis连接失败")).when(stateStore).save(any());
+
+            WorkflowExecuteResult result = workflowExecutor.executeWithResult(definition, defaultContext);
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
+            assertThat(result.getOutputAsText()).contains("存储故障输出");
+        }
+
+        @Test
+        @DisplayName("存储故障时流式执行结果仍为COMPLETED")
+        void stream_persistFailure_resultStillCompleted() throws Exception {
+            List<WorkflowNode> nodes = List.of(
+                    startNode("start"), agentNode("agent1", "Agent1"), endNode("end")
+            );
+            List<WorkflowEdge> edges = List.of(
+                    edge("e1", "start", "agent1"),
+                    edge("e2", "agent1", "end")
+            );
+            WorkflowDefinition definition = buildDefinition(nodes, edges);
+
+            when(agentEngine.run(any(AgentRequest.class)))
+                    .thenReturn(AgentResult.success("流式存储故障输出"));
+            doThrow(new RuntimeException("Redis连接失败")).when(stateStore).save(any());
+
+            List<WorkflowStreamEvent> events = workflowExecutor.stream(definition, defaultContext)
+                    .collectList()
+                    .block(Duration.ofSeconds(10));
+
+            WorkflowStreamEvent completeEvent = events.stream()
+                    .filter(e -> "WORKFLOW_COMPLETE".equals(e.getEventType()))
+                    .findFirst()
+                    .orElseThrow();
+            // 用JsonNode断言避免outputAsText计算字段反序列化问题
+            com.fasterxml.jackson.databind.JsonNode payload = new ObjectMapper()
+                    .readTree(completeEvent.getPayload());
+            assertThat(payload.get("success").asBoolean()).isTrue();
+            assertThat(payload.get("status").asText()).isEqualTo(ExecutionStatus.COMPLETED.name());
+            assertThat(payload.get("outputAsText").asText()).contains("流式存储故障输出");
+        }
     }
 
     // ==================== 10. executeFromNodes ====================
@@ -940,6 +1060,85 @@ class WorkflowAgentExecutorTest {
         void shutdown_closesExecutorGracefully() {
             // 不应抛出异常
             assertThatCode(() -> workflowExecutor.shutdown()).doesNotThrowAnyException();
+        }
+    }
+
+    @Nested
+    @DisplayName("开始/结束节点配置")
+    class StartEndNodeConfig {
+
+        @Test
+        @DisplayName("START节点initialPrompt与initialVariables注入流程变量")
+        void execute_startNodeConfig_injectedIntoVariables() {
+            WorkflowNode start = startNode("start");
+            Map<String, Object> config = new HashMap<>();
+            config.put("initialPrompt", "写一篇学习小作文");
+            config.put("initialVariables", Map.of("env", "测试", "level", "3"));
+            start.setConfig(config);
+            WorkflowDefinition definition = buildDefinition(
+                    List.of(start, endNode("end")), List.of(edge("e1", "start", "end")));
+
+            WorkflowExecuteResult result = workflowExecutor.executeWithResult(definition, defaultContext);
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getVariables())
+                    .containsEntry("prompt", "写一篇学习小作文")
+                    .containsEntry("env", "测试")
+                    .containsEntry("level", "3");
+        }
+
+        @Test
+        @DisplayName("START节点初始变量空key跳过写入")
+        void execute_startNodeBlankVariableKey_skipped() {
+            WorkflowNode start = startNode("start");
+            Map<String, Object> config = new HashMap<>();
+            config.put("initialVariables", Map.of(" ", "值", "ok", "有效"));
+            start.setConfig(config);
+            WorkflowDefinition definition = buildDefinition(
+                    List.of(start, endNode("end")), List.of(edge("e1", "start", "end")));
+
+            WorkflowExecuteResult result = workflowExecutor.executeWithResult(definition, defaultContext);
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getVariables())
+                    .containsEntry("ok", "有效")
+                    .doesNotContainKey(" ");
+        }
+
+        @Test
+        @DisplayName("END节点配置结束输出模板，最终输出取模板解析结果")
+        void execute_endNodeOutputTemplate_finalOutputUsesTemplate() {
+            WorkflowNode end = endNode("end");
+            Map<String, Object> config = new HashMap<>();
+            config.put("endOutput", "最终结果：${agent1.output}");
+            end.setConfig(config);
+            WorkflowDefinition definition = buildDefinition(
+                    List.of(startNode("start"), agentNode("agent1", "Agent1"), end),
+                    List.of(edge("e1", "start", "agent1"), edge("e2", "agent1", "end")));
+            when(agentEngine.run(any(AgentRequest.class))).thenReturn(AgentResult.success("小作文内容"));
+
+            WorkflowExecuteResult result = workflowExecutor.executeWithResult(definition, defaultContext);
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getOutputAsText()).isEqualTo("最终结果：小作文内容");
+        }
+
+        @Test
+        @DisplayName("END节点模板变量缺失解析为空时回退上游输出汇总")
+        void execute_endNodeTemplateResolvesEmpty_fallsBackToPredecessors() {
+            WorkflowNode end = endNode("end");
+            Map<String, Object> config = new HashMap<>();
+            config.put("endOutput", "${missingVar}");
+            end.setConfig(config);
+            WorkflowDefinition definition = buildDefinition(
+                    List.of(startNode("start"), agentNode("agent1", "Agent1"), end),
+                    List.of(edge("e1", "start", "agent1"), edge("e2", "agent1", "end")));
+            when(agentEngine.run(any(AgentRequest.class))).thenReturn(AgentResult.success("上游输出"));
+
+            WorkflowExecuteResult result = workflowExecutor.executeWithResult(definition, defaultContext);
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getOutputAsText()).isEqualTo("上游输出");
         }
     }
 

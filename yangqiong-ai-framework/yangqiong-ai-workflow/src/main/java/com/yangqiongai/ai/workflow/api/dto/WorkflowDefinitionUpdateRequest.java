@@ -41,4 +41,9 @@ public class WorkflowDefinitionUpdateRequest {
 
     @Size(max = 512, message = "备注长度不能超过512")
     private String remark;
+
+    /**
+     * 是否另存为新版本：true=在最新版本基础上创建version+1新记录；false或不传=原地覆盖最新版本
+     */
+    private Boolean asNewVersion;
 }

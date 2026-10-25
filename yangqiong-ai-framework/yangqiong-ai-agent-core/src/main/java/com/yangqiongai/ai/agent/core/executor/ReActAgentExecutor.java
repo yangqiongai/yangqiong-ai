@@ -552,6 +552,9 @@ public class ReActAgentExecutor {
         // 本轮已向用户发出澄清提问或引擎确认（引擎暂停属正常收尾，不按空响应处理）
         AtomicBoolean clarificationEmitted = new AtomicBoolean(false);
         AtomicBoolean confirmEmitted = new AtomicBoolean(false);
+        // 恢复续跑再次暂停时的AI提问或确认摘要（落库恢复轮次的assistant消息用）
+        AtomicReference<String> pauseClarifyQuestion = new AtomicReference<>("");
+        AtomicReference<String> pauseConfirmSummary = new AtomicReference<>("");
 
         Runnable cleanup = cancellationToken == null ? () -> {} : cancellationToken.onCancel(() -> {
             if (terminalSignal.get()) {
@@ -595,20 +598,33 @@ public class ReActAgentExecutor {
                             } else if (type == AgentEventType.REQUIRE_USER_CLARIFICATION) {
                                 clarificationEmitted.set(true);
                                 emitClarificationRequired(sink, event);
-                                // 保存暂停现场供外部提交答案后续跑（运行时上下文引用含引擎暂停快照）
-                                if (event instanceof RequireUserClarificationEvent clarification && sessionId != null) {
-                                    clarificationPendingRegistry.register(new ClarificationResumeHandle(
-                                            sessionId, clarification.getToolCallId(), clarification.getQuestion(),
-                                            this, execution.agent(), runtimeContext, context));
+                                if (event instanceof RequireUserClarificationEvent clarification) {
+                                    // 记录AI提问内容，恢复续跑再次暂停时落库为本轮assistant消息
+                                    pauseClarifyQuestion.set(StringUtils.getOrDefault(clarification.getQuestion()));
+                                    // 保存暂停现场供外部提交答案后续跑（运行时上下文引用含引擎暂停快照）
+                                    if (sessionId != null) {
+                                        clarificationPendingRegistry.register(new ClarificationResumeHandle(
+                                                sessionId, clarification.getToolCallId(), clarification.getQuestion(),
+                                                this, execution.agent(), runtimeContext, context));
+                                    }
                                 }
                             } else if (type == AgentEventType.REQUIRE_USER_CONFIRM) {
                                 confirmEmitted.set(true);
                                 emitConfirmRequired(sink, event, sessionId);
-                                // 保存暂停现场供外部批准/拒绝后恢复续跑（运行时上下文引用含引擎暂停快照）
-                                if (event instanceof RequireUserConfirmEvent confirm && sessionId != null) {
-                                    confirmPendingRegistry.register(new ConfirmResumeHandle(
-                                            sessionId, confirm.getPendingToolCalls(),
-                                            this, execution.agent(), runtimeContext, context));
+                                if (event instanceof RequireUserConfirmEvent confirm) {
+                                    // 记录待确认工具摘要，恢复续跑再次暂停时落库为本轮assistant消息
+                                    List<String> confirmToolNames = confirm.getPendingToolCalls().stream()
+                                            .map(call -> StringUtils.getOrDefault(call.getToolName()))
+                                            .filter(name -> !name.isBlank())
+                                            .toList();
+                                    pauseConfirmSummary.set(confirmToolNames.isEmpty() ? ""
+                                            : "待确认工具调用：" + String.join("、", confirmToolNames));
+                                    // 保存暂停现场供外部批准/拒绝后恢复续跑（运行时上下文引用含引擎暂停快照）
+                                    if (sessionId != null) {
+                                        confirmPendingRegistry.register(new ConfirmResumeHandle(
+                                                sessionId, confirm.getPendingToolCalls(),
+                                                this, execution.agent(), runtimeContext, context));
+                                    }
                                 }
                             } else if (type == AgentEventType.TOKEN_BUDGET_WARN
                                     || type == AgentEventType.TOKEN_BUDGET_EXCEEDED
@@ -658,7 +674,13 @@ public class ReActAgentExecutor {
                                     sink.tryEmitNext(StreamEvent.textDelta(imageMarkdown));
                                 }
                                 // 持久化时图片块转为markdown文本（base64替换为占位符），避免会话历史携带兆级数据
-                                conversationBridge.persistSession(context, ContentBlockUtils.sanitizeImagesForPersist(finalMsg));
+                                if (plan != null) {
+                                    // 恢复续跑完成：仅落库本轮assistant输出，原始输入已在登记轮持久化，避免重复写入
+                                    conversationBridge.persistResumeAssistantOutput(context,
+                                            ContentBlockUtils.sanitizeImagesForPersist(finalMsg));
+                                } else {
+                                    conversationBridge.persistSession(context, ContentBlockUtils.sanitizeImagesForPersist(finalMsg));
+                                }
                                 collector.flushFinalAnswer(answer);
                                 // 构造多模态输出内容块（过滤ThinkingBlock等内部类型）
                                 List<OutputBlock> finalBlocks = collector.getFinalOutputBlocks();
@@ -678,6 +700,23 @@ public class ReActAgentExecutor {
                                 return;
                             } else if (clarificationEmitted.get() || confirmEmitted.get()) {
                                 // 澄清提问或引擎确认后引擎暂停结束本轮流，属正常收尾，等待用户操作通过恢复端点续跑
+                                String pauseText = clarificationEmitted.get()
+                                        ? pauseClarifyQuestion.get()
+                                        : StringUtils.getOrDefault(pauseConfirmSummary.get(), "引擎暂停等待工具调用确认");
+                                if (!pauseText.isBlank()) {
+                                    AgentMessage pauseMsg = AgentMessage.builder()
+                                            .name("assistant")
+                                            .role(AgentMessageRole.ASSISTANT)
+                                            .content(List.of(AgentTextBlock.builder().text(pauseText).build()))
+                                            .build();
+                                    if (plan != null) {
+                                        // 恢复续跑再次暂停：原始输入与用户作答已分别在上轮暂停与恢复入口落库，仅补记本轮AI提问或确认摘要
+                                        conversationBridge.persistResumeAssistantOutput(context, pauseMsg);
+                                    } else {
+                                        // 首次暂停：本轮流尚未落库，连同原始用户输入一起持久化，避免会话历史丢失本轮提问
+                                        conversationBridge.persistSession(context, pauseMsg);
+                                    }
+                                }
                                 sink.tryEmitComplete();
                             } else if (lastModelError.get() != null) {
                                 // 模型调用最终失败（重试耗尽后流完成无内容），还原真实失败原因而非误报空响应

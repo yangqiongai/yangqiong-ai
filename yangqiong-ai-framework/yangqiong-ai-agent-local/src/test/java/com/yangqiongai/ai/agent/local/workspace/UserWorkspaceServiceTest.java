@@ -25,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +113,38 @@ class UserWorkspaceServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.create("u1", "w", outside.toString(), null, null, false));
         WorkspaceInfo ok = service.create("u1", "w", allowed.toString(), null, null, false);
         assertEquals(allowed.toRealPath().toString(), ok.getRootPath());
+    }
+
+    /**
+     * 默认目录：白名单为空时返回用户主目录下的 yangqiong-workspace
+     */
+    @Test
+    void defaultPathFallsBackToUserHome() {
+        String expected = Paths.get(System.getProperty("user.home"), "yangqiong-workspace").toString().replace('\\', '/');
+        assertEquals(expected, service.defaultPath());
+    }
+
+    /**
+     * 默认目录：白名单非空时返回第一个存在的白名单根，根均不存在时回退用户主目录
+     */
+    @Test
+    void defaultPathPrefersExistingWhitelistRoot() throws Exception {
+        Path allowed = Files.createDirectories(tempDir.resolve("allowed"));
+        properties.setRoots(List.of(tempDir.resolve("missing-root").toString(), allowed.toString()));
+        assertEquals(allowed.toRealPath().toString(), service.defaultPath());
+
+        properties.setRoots(List.of(tempDir.resolve("nope").toString()));
+        String expected = Paths.get(System.getProperty("user.home"), "yangqiong-workspace").toString().replace('\\', '/');
+        assertEquals(expected, service.defaultPath());
+    }
+
+    /**
+     * 默认目录：功能未启用时拒绝
+     */
+    @Test
+    void defaultPathRequiresEnabled() {
+        properties.setEnabled(false);
+        assertThrows(IllegalArgumentException.class, () -> service.defaultPath());
     }
 
     /**

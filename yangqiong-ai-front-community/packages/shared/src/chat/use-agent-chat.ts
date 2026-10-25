@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { extractMcpAppsUiDeclaration } from '../components/McpAppRenderer';
 import type {
   AgentChatRequest,
@@ -23,6 +23,11 @@ import type {
   ConfirmRequestInfo,
   QuotaWarningInfo,
 } from '../types/agent';
+import {
+  consumeAgentPendingHandoff,
+  emitAgentChatViewActive,
+  onAgentPendingHandled,
+} from './pending-sync';
 import { newId, type ChatMessage } from './chat-message';
 
 /**
@@ -337,6 +342,43 @@ export const useAgentChat = (api: AgentChatApi, options?: UseAgentChatOptions) =
     setConfirms([]);
     setQuotaWarning('');
   };
+
+  // 他处（如全局通知卡片）处理完成广播：自动移除本会话对应的内嵌澄清/确认框，避免两处同时等待用户输入
+  useEffect(() => {
+    if (!sessionId) {
+      return undefined;
+    }
+    // "去处理"跳转交接的挂起澄清：恢复会话时还原为内嵌提问框，在对话框内完成作答
+    const handoff = consumeAgentPendingHandoff(sessionId);
+    if (handoff.length > 0) {
+      setClarifications((prev) => {
+        const known = new Set(prev.map((c) => c.toolCallId));
+        return [
+          ...prev,
+          ...handoff
+            .filter((item) => !known.has(item.toolCallId))
+            .map((item) => ({ toolCallId: item.toolCallId, question: item.question, options: item.options })),
+        ];
+      });
+    }
+    return onAgentPendingHandled((detail) => {
+      if (detail.sessionId !== sessionId) {
+        return;
+      }
+      if (detail.taskType === 'CLARIFICATION' && detail.toolCallId) {
+        setClarifications((prev) => prev.filter((c) => c.toolCallId !== detail.toolCallId));
+      }
+      if (detail.taskType === 'CONFIRM' && detail.requestId) {
+        setConfirms((prev) => prev.filter((c) => c.requestId !== detail.requestId));
+      }
+    });
+  }, [sessionId]);
+
+  // 对话页挂载期间广播视图激活：全局通知卡片在对话界面不再弹出（内嵌框负责呈现），卸载时解除
+  useEffect(() => {
+    emitAgentChatViewActive(true);
+    return () => emitAgentChatViewActive(false);
+  }, []);
 
   return {
     messages,

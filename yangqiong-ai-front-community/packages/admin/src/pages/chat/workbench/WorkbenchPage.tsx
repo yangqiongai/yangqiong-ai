@@ -50,6 +50,7 @@ import {
   collapseFileRefs,
   copyToClipboard,
   diffProducedFiles,
+  emitAgentPendingHandled,
   listAllFiles,
   restoreMessagesFromExport,
   selectDefaultWorkspace,
@@ -504,8 +505,9 @@ export const WorkbenchPage: React.FC = () => {
       );
     });
     setClarificationSubmitting(false);
-    // 已回答的提问从卡片列表移除
+    // 已回答的提问从卡片列表移除，并广播处理完成供全局通知卡片同步移除
     setClarifications((prev) => prev.filter((c) => c.toolCallId !== toolCallId));
+    emitAgentPendingHandled({ sessionId, taskType: 'CLARIFICATION', toolCallId });
     queryClient.invalidateQueries({ queryKey: ['workbench-sessions'] });
     // 恢复流中Agent可能已新增/修改/删除文件，自动刷新文件树
     setTreeRefreshKey((k) => k + 1);
@@ -533,8 +535,9 @@ export const WorkbenchPage: React.FC = () => {
       );
     });
     setConfirmSubmitting(false);
-    // 已处理的确认从卡片列表移除
+    // 已处理的确认从卡片列表移除，并广播处理完成供全局通知卡片同步移除
     setConfirms((prev) => prev.filter((c) => c.requestId !== requestId));
+    emitAgentPendingHandled({ sessionId, taskType: 'CONFIRM', requestId });
     queryClient.invalidateQueries({ queryKey: ['workbench-sessions'] });
     // 恢复流中Agent可能已新增/修改/删除文件，自动刷新文件树
     setTreeRefreshKey((k) => k + 1);

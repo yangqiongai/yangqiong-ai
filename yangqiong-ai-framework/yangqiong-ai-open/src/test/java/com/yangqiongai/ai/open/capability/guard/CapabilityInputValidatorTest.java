@@ -136,6 +136,18 @@ class CapabilityInputValidatorTest {
     }
 
     @Test
+    void testBlankStringSkipsEnumAndPattern() {
+        // 空串视为未提供：可选枚举/正则字段留空表示交给模型自行决定，不应校验失败
+        String schema = "{\"type\":\"object\","
+                + "\"properties\":{\"riskLevel\":{\"type\":\"string\",\"enum\":[\"低\",\"中\",\"高\"]},"
+                + "\"projectCode\":{\"type\":\"string\",\"pattern\":\"^PRJ-\\\\d{4}$\"}}}";
+        assertThat(validator.validate(args("riskLevel", "", "projectCode", "  "), schema).isValid()).isTrue();
+
+        // 非空值仍正常校验
+        assertThat(validator.validate(args("riskLevel", "超高"), schema).isValid()).isFalse();
+    }
+
+    @Test
     void testNestedObjectRecursion() {
         String schema = "{\"type\":\"object\",\"properties\":{\"budgetAnalysis\":{\"type\":\"object\","
                 + "\"required\":[\"totalAmount\"],"

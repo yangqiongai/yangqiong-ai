@@ -27,7 +27,9 @@ import com.yangqiongai.ai.open.capability.spec.AgentOverrides;
 import com.yangqiongai.ai.open.capability.spec.CapabilitySpec;
 import com.yangqiongai.ai.common.sse.StreamEvent;
 import com.yangqiongai.ai.common.bean.ApiResult;
+import com.yangqiongai.ai.common.net.SafeUrlDownloader;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -62,6 +64,11 @@ public class OpenCapabilityController {
     private final DataContextHub dataContextHub;
     private final CapabilityEngine engine;
     private final ObjectProvider<CapabilityDocumentIngestPort> ingestPortProvider;
+
+    /**
+     * URL拉取组件（setter注入，保持构造器签名稳定）
+     */
+    private SafeUrlDownloader safeUrlDownloader;
 
     /**
      * 对外视图转换器（NON_NULL：剥离内部字段后不输出null字段名）
@@ -293,6 +300,106 @@ public class OpenCapabilityController {
         }
         String uploadKbCode = overrides.getKnowledgeBase().getUploadKbCode();
         return uploadKbCode != null && !uploadKbCode.isBlank() ? uploadKbCode : null;
+    }
+
+    /**
+     * 注入URL拉取组件（setter注入保持构造器签名稳定，继承子类无需调整）
+     * @param safeUrlDownloader
+     */
+    @Autowired(required = false)
+    public void setSafeUrlDownloader(SafeUrlDownloader safeUrlDownloader) {
+        this.safeUrlDownloader = safeUrlDownloader;
+    }
+
+    /**
+     * 附件URL直传请求体
+     */
+    public static class FileUrlUploadRequest {
+
+        /**
+         * 能力编码
+         */
+        private String capability;
+
+        /**
+         * 附件URL
+         */
+        private String fileUrl;
+
+        /**
+         * 文件名（可选，未传时从URL或响应头解析）
+         */
+        private String fileName;
+
+        public String getCapability() {
+            return capability;
+        }
+
+        public void setCapability(String capability) {
+            this.capability = capability;
+        }
+
+        public String getFileUrl() {
+            return fileUrl;
+        }
+
+        public void setFileUrl(String fileUrl) {
+            this.fileUrl = fileUrl;
+        }
+
+        public String getFileName() {
+            return fileName;
+        }
+
+        public void setFileName(String fileName) {
+            this.fileName = fileName;
+        }
+    }
+
+    /**
+     * 通过URL直传附件入能力配置的文件上传库（服务端拉取，内置内网地址防护与大小/超时限制）
+     * @param request
+     * @return
+     */
+    @PostMapping("/files/url")
+    public ApiResult<Map<String, Object>> uploadCapabilityFileByUrl(@RequestBody FileUrlUploadRequest request) {
+        if (request.getCapability() == null || request.getCapability().isBlank()) {
+            return ApiResult.fail("capability不能为空");
+        }
+        if (request.getFileUrl() == null || request.getFileUrl().isBlank()) {
+            return ApiResult.fail("fileUrl不能为空");
+        }
+        CapabilitySpec spec = catalog.get(request.getCapability());
+        if (spec == null) {
+            return ApiResult.fail("能力不存在或已禁用: " + request.getCapability());
+        }
+        String uploadKbCode = resolveUploadKbCode(spec);
+        if (uploadKbCode == null) {
+            return ApiResult.fail("该能力未启用文件上传，请先在能力配置中指定文件上传库");
+        }
+        CapabilityDocumentIngestPort ingestPort = ingestPortProvider.getIfAvailable();
+        if (ingestPort == null) {
+            return ApiResult.fail("文件入库组件未装配");
+        }
+        if (safeUrlDownloader == null) {
+            return ApiResult.fail("URL拉取组件未装配");
+        }
+        try {
+            SafeUrlDownloader.Result fetched = safeUrlDownloader.fetch(request.getFileUrl());
+            String fileName = request.getFileName() != null && !request.getFileName().isBlank()
+                    ? request.getFileName() : fetched.getFileName();
+            CapabilityDocumentIngestPort.IngestResult result = ingestPort.ingest(
+                    uploadKbCode, fileName, fetched.getBytes(), fetched.getContentType());
+            Map<String, Object> data = new java.util.LinkedHashMap<>();
+            data.put("docId", result.getDocId() != null ? result.getDocId() : "");
+            data.put("kbId", result.getKbId() != null ? result.getKbId() : uploadKbCode);
+            data.put("docStatus", result.getDocStatus() != null ? result.getDocStatus() : "");
+            data.put("capability", request.getCapability());
+            data.put("sourceUrl", request.getFileUrl());
+            return ApiResult.ok(data);
+        } catch (Exception e) {
+            return ApiResult.fail("URL附件入库失败: " + e.getMessage());
+        }
     }
 
     /**

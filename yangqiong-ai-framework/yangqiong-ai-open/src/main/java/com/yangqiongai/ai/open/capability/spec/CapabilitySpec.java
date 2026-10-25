@@ -74,6 +74,11 @@ public class CapabilitySpec {
     private AgentOverrides agentOverrides;
 
     /**
+     * 交互功能开关（默认关闭；关闭时不向外发送审批与澄清流，开启后外部调用方可处理澄清提问与人工审批）
+     */
+    private Boolean interactionEnabled;
+
+    /**
      * 入参JSON Schema文件名（相对于能力目录，默认 input.schema.json）
      */
     private String inputSchema;
@@ -203,6 +208,14 @@ public class CapabilitySpec {
 
     public void setAgentOverrides(AgentOverrides agentOverrides) {
         this.agentOverrides = agentOverrides;
+    }
+
+    public Boolean getInteractionEnabled() {
+        return interactionEnabled;
+    }
+
+    public void setInteractionEnabled(Boolean interactionEnabled) {
+        this.interactionEnabled = interactionEnabled;
     }
 
     public String getInputSchema() {

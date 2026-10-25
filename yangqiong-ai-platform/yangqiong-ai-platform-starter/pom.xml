@@ -113,10 +113,6 @@
         </dependency>
         <dependency>
             <groupId>com.yangqiongai.ai</groupId>
-            <artifactId>yangqiong-ai-platform-connector</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.yangqiongai.ai</groupId>
             <artifactId>yangqiong-ai-platform-ecosystem</artifactId>
         </dependency>
     </dependencies>

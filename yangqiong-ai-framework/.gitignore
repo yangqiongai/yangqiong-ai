@@ -40,3 +40,4 @@ html/dist/
 ### 其他 ###
 /.*
 !.gitignore
+/*.log

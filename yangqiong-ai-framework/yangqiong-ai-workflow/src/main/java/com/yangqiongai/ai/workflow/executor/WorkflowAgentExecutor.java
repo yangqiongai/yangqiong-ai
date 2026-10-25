@@ -376,21 +376,24 @@ public class WorkflowAgentExecutor {
                 state.setStatus(ExecutionStatus.COMPLETED);
             }
             state.setUpdateTime(System.currentTimeMillis());
+            // 先构建结果快照再持久化，避免存储故障时persistState把状态改回FAILED污染执行结果与事件
+            WorkflowExecuteResult executeResult = stateService.buildWorkflowExecuteResult(state, definition, workflowStartTime);
+            boolean workflowFailed = state.isFailed();
             stateService.persistState(definition, state);
 
             try {
                 executionHistoryRepository.recordCompletion(state,
-                        state.isCompleted() ? stateService.buildOutput(state, definition) : null,
-                        state.isFailed() ? "工作流执行失败" : null);
+                        executeResult.isSuccess() ? stateService.buildOutput(state, definition) : null,
+                        workflowFailed ? "工作流执行失败" : null);
             } catch (Exception e) {
                 log.warn("记录执行历史失败: {}", e.getMessage());
             }
 
-            fireWorkflowEvent(buildWorkflowEvent(state.isFailed()
+            fireWorkflowEvent(buildWorkflowEvent(workflowFailed
                             ? WorkflowExecutionEvent.WorkflowExecutionEventType.WORKFLOW_FAILED
                             : WorkflowExecutionEvent.WorkflowExecutionEventType.WORKFLOW_COMPLETE,
                     state, definition, System.currentTimeMillis() - workflowStartTime, null));
-            return stateService.buildWorkflowExecuteResult(state, definition, workflowStartTime);
+            return executeResult;
         } catch (Exception e) {
             log.error("工作流执行失败: definition={}", definition.getName(), e);
             state.setStatus(ExecutionStatus.FAILED);
@@ -470,7 +473,7 @@ public class WorkflowAgentExecutor {
                 case NOTIFY -> notifyHandler.executeNotifyNode(context, state, node);
                 case TIME_CONTROL -> timeControlHandler.previewTimeControlNode(node);
                 case START -> executeStartNode(state, node);
-                case END -> AgentResult.success("");
+                case END -> executeEndNode(state, node);
                 default -> AgentResult.failure("不支持的节点类型: " + node.getType());
             };
         } catch (Exception e) {
@@ -937,10 +940,11 @@ public class WorkflowAgentExecutor {
                 }
                 state.setStatus(ExecutionStatus.COMPLETED);
                 state.setUpdateTime(System.currentTimeMillis());
-                stateService.persistState(definition, state);
-                // 推送完整执行结果JSON，供前端在流式结束后展示节点轨迹与流程变量
+                // 先构建结果快照再持久化，避免存储故障时persistState把状态改回FAILED污染执行结果
                 WorkflowExecuteResult executeResult = stateService.buildWorkflowExecuteResult(
                         state, definition, state.getCreateTime());
+                stateService.persistState(definition, state);
+                // 推送完整执行结果JSON，供前端在流式结束后展示节点轨迹与流程变量
                 sink.tryEmitNext(WorkflowStreamEvent.workflowComplete(definition.getName(), serializeResult(executeResult)));
             } catch (Exception e) {
                 log.error("流式工作流执行失败: definition={}", definition.getName(), e);
@@ -1254,7 +1258,7 @@ public class WorkflowAgentExecutor {
                 case NOTIFY -> result = checkAndExecuteWithTimeout(definition, context, state, node, () -> notifyHandler.executeNotifyNode(context, state, node));
                 case TIME_CONTROL -> result = checkAndExecute(definition, context, state, node, () -> timeControlHandler.executeTimeControlNode(context, state, node));
                 case START -> result = checkAndExecute(definition, context, state, node, () -> executeStartNode(state, node));
-                case END -> result = checkAndExecute(definition, context, state, node, () -> AgentResult.success(""));
+                case END -> result = checkAndExecute(definition, context, state, node, () -> executeEndNode(state, node));
                 default -> result = AgentResult.failure("不支持的节点类型: " + node.getType());
             }
 
@@ -1539,6 +1543,32 @@ public class WorkflowAgentExecutor {
         if (initialPrompt != null && !initialPrompt.isBlank()) {
             state.setVariable("prompt", initialPrompt);
             log.info("START节点初始化问题: {}", initialPrompt);
+        }
+        // 初始变量写入流程状态，供后续节点通过${var}引用
+        Map<String, String> initialVariables = node.getConfigStringMap("initialVariables");
+        if (initialVariables != null) {
+            initialVariables.forEach((key, value) -> {
+                if (key != null && !key.isBlank()) {
+                    state.setVariable(key, value);
+                }
+            });
+        }
+        return AgentResult.success("");
+    }
+
+    /**
+     * 执行END节点，配置了结束输出模板时解析${var}作为节点输出，未配置或解析为空时回退上游输出汇总
+     * @param state
+     * @param node
+     * @return
+     */
+    private AgentResult executeEndNode(WorkflowState state, WorkflowNode node) {
+        String endOutput = node.getConfigString("endOutput");
+        if (endOutput != null && !endOutput.isBlank()) {
+            String resolved = stateService.resolveTemplateString(endOutput, state);
+            if (resolved != null && !resolved.isBlank()) {
+                return AgentResult.success(resolved);
+            }
         }
         return AgentResult.success("");
     }
@@ -2140,6 +2170,18 @@ public class WorkflowAgentExecutor {
         // 注入工作流变量到body，供Agent执行时访问
         if (state.getVariables() != null) {
             nodeRequest.addBody(WorkflowBodyKeys.WORKFLOW_VARIABLES, new HashMap<>(state.getVariables()));
+        }
+        // 透传节点配置中下划线前缀的私有扩展参数（如专属Agent的引擎/会话参数），与标准字段隔离
+        Map<String, Object> nodeConfig = agentNode.getConfig();
+        if (nodeConfig != null) {
+            // 诊断日志：确认节点私有参数进入body（仅键名，不打印值防止凭证泄露）
+            log.info("节点私有参数透传: nodeId={}, keys={}", agentNode.getId(),
+                    nodeConfig.keySet().stream().filter(k -> k.startsWith("_")).sorted().toList());
+            for (Map.Entry<String, Object> entry : nodeConfig.entrySet()) {
+                if (entry.getKey().startsWith("_") && entry.getValue() != null) {
+                    nodeRequest.addBody(entry.getKey(), entry.getValue());
+                }
+            }
         }
         return nodeRequest;
     }

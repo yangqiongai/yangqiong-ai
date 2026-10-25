@@ -150,7 +150,6 @@ export const MENU_GROUPS: MenuConfigGroup[] = [
     icon: GlobalOutlined,
     children: [
       { key: 'open-capabilities', label: '开放能力', path: '/open-capabilities', icon: GlobalOutlined },
-      { key: 'connectors', label: '连接器', path: '/connectors', icon: ApiOutlined },
       { key: 'mcp-expose', label: 'MCP 出口', path: '/mcp-expose', icon: ApiOutlined },
       { key: 'a2a-card', label: 'A2A 卡片', path: '/a2a-card', icon: DeploymentUnitOutlined },
     ],

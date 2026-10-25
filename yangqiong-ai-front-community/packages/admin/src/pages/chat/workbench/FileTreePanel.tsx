@@ -598,7 +598,8 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({ workspaceId, userI
           justifyContent: 'space-between',
         }}
       >
-        <Text strong style={{ fontSize: 13, color: 'var(--wb-text)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* 竖条与标题必须是兄弟 flex 子项：包在 Text strong 内会被并入单个 strong 元素导致 gap 失效 */}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <span
             style={{
               width: 4,
@@ -606,10 +607,13 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({ workspaceId, userI
               borderRadius: 2,
               background: 'linear-gradient(180deg, #4F6BFF 0%, #8B5CF6 100%)',
               display: 'inline-block',
+              flexShrink: 0,
             }}
           />
-          文件树
-        </Text>
+          <Text strong style={{ fontSize: 13, color: 'var(--wb-text)' }}>
+            文件树
+          </Text>
+        </span>
         <Space size={4}>
           <Tooltip title="刷新">
             <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => void loadRoot()} />

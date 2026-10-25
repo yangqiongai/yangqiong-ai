@@ -156,6 +156,11 @@ export interface AgentConfigStructured {
   systemPrompt?: string;
   maxIterations?: number;
   temperature?: number;
+
+  /**
+   * 上下文窗口Token上限（默认0=不启用；超出时引擎按截断策略裁剪历史消息）
+   */
+  maxContextTokens?: number;
   bindingMode?: string;
   tools?: string[];
   mcpServers?: string[];
@@ -341,6 +346,8 @@ export const stringifyAgentConfig = (cfg: AgentConfigStructured, pretty = false)
   if (cfg.systemPrompt) cleaned.systemPrompt = cfg.systemPrompt;
   if (cfg.maxIterations != null) cleaned.maxIterations = cfg.maxIterations;
   if (cfg.temperature != null) cleaned.temperature = cfg.temperature;
+  // 两态语义：上下文Token上限仅配置正数时写入，0/未配置=不启用截断
+  if (cfg.maxContextTokens != null && cfg.maxContextTokens > 0) cleaned.maxContextTokens = cfg.maxContextTokens;
   if (cfg.bindingMode) cleaned.bindingMode = cfg.bindingMode;
   if (cfg.tools?.length) cleaned.tools = cfg.tools;
   if (cfg.mcpServers?.length) cleaned.mcpServers = cfg.mcpServers;
@@ -405,6 +412,7 @@ export const configSummary = (cfg: AgentConfigStructured): string => {
   if (cfg.model) parts.push(`模型 ${cfg.model}`);
   if (cfg.temperature != null) parts.push(`温度 ${cfg.temperature}`);
   if (cfg.maxIterations != null) parts.push(`最大迭代 ${cfg.maxIterations}`);
+  if (cfg.maxContextTokens != null && cfg.maxContextTokens > 0) parts.push(`上下文上限 ${cfg.maxContextTokens}`);
   if (cfg.executionParadigm?.type && cfg.executionParadigm.type !== 'react') {
     const matched = EXECUTION_PARADIGM_OPTIONS.find((opt) => opt.value === cfg.executionParadigm?.type);
     parts.push(`范式 ${matched ? matched.label.split('（')[0] : cfg.executionParadigm.type}`);

@@ -245,4 +245,25 @@ class StepRecordingManagerTest {
 
         assertThat(recorder).isSameAs(trackerRecorder);
     }
+
+    @Test
+    @DisplayName("同步执行模式判定：标记sync或未标记均视为同步")
+    void isSyncExecution_syncOrUnmarkedReturnsTrue() {
+        AgentRequest request = org.mockito.Mockito.mock(AgentRequest.class);
+        Map<String, Object> body = new HashMap<>();
+        body.put(StepRecordingManager.INTERNAL_EXECUTION_MODE, "sync");
+        org.mockito.Mockito.when(request.getBody()).thenReturn(body);
+        assertThat(StepRecordingManager.isSyncExecution(request)).isTrue();
+
+        AgentRequest unmarked = org.mockito.Mockito.mock(AgentRequest.class);
+        org.mockito.Mockito.when(unmarked.getBody()).thenReturn(new HashMap<>());
+        assertThat(StepRecordingManager.isSyncExecution(unmarked)).isTrue();
+    }
+
+    @Test
+    @DisplayName("同步执行模式判定：stream标记与空请求视为非同步")
+    void isSyncExecution_streamMarkedReturnsFalse() {
+        assertThat(StepRecordingManager.isSyncExecution(streamRequest())).isFalse();
+        assertThat(StepRecordingManager.isSyncExecution(null)).isTrue();
+    }
 }

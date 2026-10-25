@@ -1,6 +1,23 @@
+<!--
+ * Copyright (C) 2026 yangqiong
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, version 3 of the License
+ * only ("AGPL-3.0-only") and not any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import type { NodeType, NodeApprovalConfig, TimeControlConfig, WorkflowDefinition, WorkflowNodeExecData } from '../types/workflow'
+import type { NodeType, NodeApprovalConfig, TimeControlConfig, WorkflowDefinition, WorkflowNodeExecData, WorkflowAgentPreset, AgentPresetActionPayload } from '../types/workflow'
 
 const props = defineProps<{
   nodeId: string
@@ -15,8 +32,12 @@ const props = defineProps<{
   maxRetries?: number
   nodeOptions?: Array<{ id: string; name: string }>
   agentOptions?: Array<{ code: string; name: string }>
+  /** Agent节点预设模板（宿主注入，如企业版专属Agent预设） */
+  agentPresets?: WorkflowAgentPreset[]
   /** 集成渠道下拉选项，供通知节点选择 */
   channelOptions?: Array<{ id: string; name: string; type?: string }>
+  /** 工作区下拉选项（仅服务端存储型），供workspaceSelect预设（本地节点）配置选择 */
+  workspaceOptions?: Array<{ id: string; name: string }>
   definition?: WorkflowDefinition
   /** 获取画布当前最新定义（props.definition 挂载后不回传更新，试运行必须用实时定义） */
   getDefinition?: () => WorkflowDefinition
@@ -30,6 +51,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update', data: { name: string; config: Record<string, any>; inputMappings?: Record<string, string>; outputMappings?: Record<string, string>; approvalConfig?: NodeApprovalConfig; timeControlConfig?: TimeControlConfig; timeoutSeconds?: number; maxRetries?: number }): void
   (e: 'delete'): void
+  (e: 'presetAction', payload: AgentPresetActionPayload): void
 }>()
 
 function cloneApprovalConfig(cfg?: NodeApprovalConfig): NodeApprovalConfig {
@@ -162,6 +184,10 @@ const nodeTypeLabel = computed(() => {
     TIME_CONTROL: '时间控制',
     START: '开始节点',
     END: '结束节点',
+  }
+  // 固定Agent定制节点（如浏览器节点）标题跟随预设名称
+  if (props.nodeType === 'AGENT' && fixedPreset.value) {
+    return fixedPreset.value.name
   }
   return labels[props.nodeType] || props.nodeType
 })
@@ -348,9 +374,10 @@ function toggleWeekday(day: number) {
   handleUpdate()
 }
 
-// Agent 下拉选项：当前值不在列表中时保留显示，避免打开面板时回显丢失
+// Agent 下拉选项：过滤固定Agent预设（浏览器节点等定制节点专用），当前值不在列表中时保留显示，避免打开面板时回显丢失
 const resolvedAgentOptions = computed(() => {
-  const options = props.agentOptions ?? []
+  const fixedCodes = new Set((props.agentPresets ?? []).filter((preset) => preset.fixedAgent).map((preset) => preset.code))
+  const options = (props.agentOptions ?? []).filter((opt) => !fixedCodes.has(opt.code))
   const current = formData.config.agentCode as string | undefined
   if (current && !options.some((opt) => opt.code === current)) {
     return [...options, { code: current, name: current }]
@@ -366,6 +393,32 @@ function updateAgentCode(code: string) {
     formData.config.agentCode = code
   }
   handleUpdate()
+}
+
+// Agent节点预设模板：agentCode命中时渲染专属参数表单
+const matchedPreset = computed(() => {
+  const code = formData.config.agentCode as string | undefined
+  if (!code) return undefined
+  return (props.agentPresets ?? []).find((preset) => preset.code === code)
+})
+
+// 固定Agent定制节点（如浏览器节点）：Agent类型锁定不可切换，仅渲染专属参数表单
+const fixedPreset = computed(() => (matchedPreset.value?.fixedAgent ? matchedPreset.value : undefined))
+
+// 更新预设专属字段，空串视为未配置直接移除（switch的false是合法值不受影响）
+function updatePresetField(key: string, value: unknown) {
+  if (value === '' || value === undefined) {
+    delete formData.config[key]
+  } else {
+    formData.config[key] = value
+  }
+  handleUpdate()
+}
+
+// 触发预设动作按钮（config为当前表单值快照，语义由宿主实现）
+function firePresetAction(key: string) {
+  if (!matchedPreset.value) return
+  emit('presetAction', { actionKey: key, presetCode: matchedPreset.value.code, config: { ...formData.config } })
 }
 
 // 生成不重复条目 key（时间戳+随机后缀，避免连点冲突）
@@ -434,6 +487,36 @@ function updateBranchEntry(index: number, field: 'key' | 'value', val: string) {
 const headerEntries = computed(() => {
   return Object.entries(parseStringMapValue(formData.config.headers)).map(([key, value]) => ({ key, value }))
 })
+
+// START 节点初始变量管理（变量名 -> 值，执行开始时写入流程变量）
+const initialVariableEntries = computed(() => {
+  return Object.entries(parseStringMapValue(formData.config.initialVariables)).map(([key, value]) => ({ key, value }))
+})
+
+function addInitialVariable() {
+  const vars = parseStringMapValue(formData.config.initialVariables)
+  vars[genKey('var')] = ''
+  formData.config.initialVariables = vars
+  handleUpdate()
+}
+
+function removeInitialVariable(index: number) {
+  const entries = Object.entries(parseStringMapValue(formData.config.initialVariables))
+  entries.splice(index, 1)
+  formData.config.initialVariables = Object.fromEntries(entries)
+  handleUpdate()
+}
+
+function updateInitialVariable(index: number, field: 'key' | 'value', val: string) {
+  const entries = Object.entries(parseStringMapValue(formData.config.initialVariables))
+  if (field === 'key') {
+    entries[index] = [uniqueKey(val, entries.map(([k]) => k), index), entries[index][1]]
+  } else {
+    entries[index][1] = val
+  }
+  formData.config.initialVariables = Object.fromEntries(entries)
+  handleUpdate()
+}
 
 function addHeaderEntry() {
   const headers = parseStringMapValue(formData.config.headers)
@@ -929,6 +1012,58 @@ async function runReExecute() {
         />
       </div>
 
+      <!-- ========== 开始节点配置 ========== -->
+      <template v-if="nodeType === 'START'">
+        <div class="wf-section-title">初始问题</div>
+        <div class="wf-form-group">
+          <textarea
+            v-model="formData.config.initialPrompt"
+            class="wf-form-textarea"
+            :disabled="readonly"
+            placeholder="执行开始时写入流程变量 prompt，Agent节点未配置提示词时将使用它"
+            rows="4"
+            @change="handleUpdate"
+          />
+        </div>
+        <div class="wf-section-title">初始变量</div>
+        <div class="wf-form-hint">执行开始时写入流程变量，供后续节点用 ${var} 引用</div>
+        <div v-for="(entry, index) in initialVariableEntries" :key="'iv-' + index" class="wf-assign-row">
+          <input
+            :value="entry.key"
+            class="wf-form-input wf-assign-key"
+            :disabled="readonly"
+            placeholder="变量名"
+            @change="updateInitialVariable(index, 'key', ($event.target as HTMLInputElement).value)"
+          />
+          <span class="wf-assign-eq">=</span>
+          <input
+            :value="entry.value"
+            class="wf-form-input wf-assign-value"
+            :disabled="readonly"
+            placeholder="变量值"
+            @change="updateInitialVariable(index, 'value', ($event.target as HTMLInputElement).value)"
+          />
+          <button v-if="!readonly" class="wf-assign-remove" @click="removeInitialVariable(index)">x</button>
+        </div>
+        <button v-if="!readonly" class="wf-btn-add" @click="addInitialVariable">+ 添加变量</button>
+      </template>
+
+      <!-- ========== 结束节点配置 ========== -->
+      <template v-if="nodeType === 'END'">
+        <div class="wf-section-title">结束输出</div>
+        <div class="wf-form-hint">最终输出取此模板解析结果，留空则汇总上游节点输出；支持 ${var} 引用流程变量，如 ${agent1.output}</div>
+        <div class="wf-form-group">
+          <textarea
+            v-model="formData.config.endOutput"
+            class="wf-form-textarea"
+            :disabled="readonly"
+            placeholder="留空则输出上游节点结果汇总"
+            rows="4"
+            @change="handleUpdate"
+          />
+        </div>
+      </template>
+
       <!-- ========== 执行策略 (所有节点类型通用) ========== -->
       <template v-if="!['START', 'END'].includes(nodeType)">
         <div class="wf-section-title">执行策略</div>
@@ -962,21 +1097,33 @@ async function runReExecute() {
 
       <!-- ========== AGENT ========== -->
       <template v-if="nodeType === 'AGENT'">
-        <div class="wf-form-group">
-          <label class="wf-form-label">Agent</label>
-          <select
-            :value="formData.config.agentCode ?? ''"
-            class="wf-form-select"
-            :disabled="readonly"
-            @change="updateAgentCode(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">请选择 Agent</option>
-            <option v-for="opt in resolvedAgentOptions" :key="opt.code" :value="opt.code">
-              {{ opt.name }}（{{ opt.code }}）
-            </option>
-          </select>
-          <div class="wf-form-hint">从已注册的 Agent 列表中选择本节点调用的执行体</div>
+        <!-- 固定Agent定制节点（如浏览器节点）：Agent类型锁定，仅展示身份标识 -->
+        <div v-if="fixedPreset" class="wf-form-group">
+          <div class="wf-fixed-agent" :style="fixedPreset.color ? { borderColor: fixedPreset.color, color: fixedPreset.color } : undefined">
+            <span class="wf-fixed-agent__icon">{{ fixedPreset.icon || '🤖' }}</span>
+            <span class="wf-fixed-agent__meta">
+              <span class="wf-fixed-agent__name">{{ fixedPreset.name }}</span>
+              <span class="wf-fixed-agent__desc">{{ fixedPreset.description || 'Agent类型已固定，不可更改' }}</span>
+            </span>
+          </div>
         </div>
+        <template v-else>
+          <div class="wf-form-group">
+            <label class="wf-form-label">Agent</label>
+            <select
+              :value="formData.config.agentCode ?? ''"
+              class="wf-form-select"
+              :disabled="readonly"
+              @change="updateAgentCode(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">请选择 Agent</option>
+              <option v-for="opt in resolvedAgentOptions" :key="opt.code" :value="opt.code">
+                {{ opt.name }}（{{ opt.code }}）
+              </option>
+            </select>
+            <div class="wf-form-hint">从已注册的 Agent 列表中选择本节点调用的执行体</div>
+          </div>
+        </template>
         <div class="wf-form-group">
           <label class="wf-form-label">提示词</label>
           <textarea
@@ -1000,6 +1147,111 @@ async function runReExecute() {
             @change="handleUpdate"
           />
         </div>
+        <!-- 命中预设时渲染专属配置（schema驱动，字段定义由宿主注入） -->
+        <template v-if="matchedPreset">
+          <!-- 工作区选择（workspaceSelect预设如本地节点），选项由宿主注入，选中值经执行器透传为_workspaceId -->
+          <div v-if="matchedPreset.workspaceSelect" class="wf-form-group">
+            <label class="wf-form-label">工作区</label>
+            <select
+              :value="formData.config._workspaceId ?? ''"
+              class="wf-form-select"
+              :disabled="readonly"
+              @change="updatePresetField('_workspaceId', ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">请选择工作区</option>
+              <option v-for="ws in workspaceOptions ?? []" :key="ws.id" :value="ws.id">
+                {{ ws.name }}
+              </option>
+            </select>
+            <div class="wf-form-hint">在选定的工作区内读写文件执行任务，留空时由运行时分配默认工作区</div>
+          </div>
+          <!-- 文件操作审批（工作区节点），经执行器透传为_approvalBypass；默认自动放行，工作流同步执行无审批卡片通道 -->
+          <div v-if="matchedPreset.workspaceSelect" class="wf-form-group">
+            <label class="wf-form-label">文件操作审批</label>
+            <select
+              :value="formData.config._approvalBypass || 'auto'"
+              class="wf-form-select"
+              :disabled="readonly"
+              @change="updatePresetField('_approvalBypass', ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="auto">自动执行（工作流推荐）</option>
+              <option value="workspace">按工作区审批层级</option>
+            </select>
+            <div class="wf-form-hint">自动执行：写删文件不再等待人工确认直接执行；按工作区层级：MANUAL层级下写删操作需人工确认，工作流执行会因无法弹卡而失败</div>
+          </div>
+          <div v-if="(matchedPreset.fields ?? []).length" class="wf-section-title">{{ matchedPreset.name }}参数</div>
+          <div
+            v-for="field in matchedPreset.fields ?? []"
+            :key="field.key"
+            class="wf-form-group"
+          >
+            <label class="wf-form-label">{{ field.label }}</label>
+            <select
+              v-if="field.type === 'select'"
+              :value="formData.config[field.key] ?? ''"
+              class="wf-form-select"
+              :disabled="readonly"
+              @change="updatePresetField(field.key, ($event.target as HTMLSelectElement).value)"
+            >
+              <option v-for="opt in field.options ?? []" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+            <textarea
+              v-else-if="field.type === 'textarea'"
+              :value="formData.config[field.key] ?? ''"
+              class="wf-form-textarea"
+              :disabled="readonly"
+              :placeholder="field.placeholder"
+              :rows="field.rows ?? 3"
+              @change="updatePresetField(field.key, ($event.target as HTMLTextAreaElement).value)"
+            />
+            <input
+              v-else-if="field.type === 'number'"
+              :value="formData.config[field.key] ?? ''"
+              class="wf-form-input"
+              type="number"
+              :disabled="readonly"
+              :placeholder="field.placeholder"
+              :min="field.min"
+              :max="field.max"
+              @change="updatePresetField(field.key, ($event.target as HTMLInputElement).value === '' ? '' : Number(($event.target as HTMLInputElement).value))"
+            />
+            <label v-else-if="field.type === 'switch'" class="wf-switch-row">
+              <input
+                type="checkbox"
+                :checked="!!formData.config[field.key]"
+                :disabled="readonly"
+                @change="updatePresetField(field.key, ($event.target as HTMLInputElement).checked)"
+              />
+              <span>{{ field.placeholder || (formData.config[field.key] ? '已开启' : '已关闭') }}</span>
+            </label>
+            <input
+              v-else
+              :value="formData.config[field.key] ?? ''"
+              class="wf-form-input"
+              type="text"
+              :disabled="readonly"
+              :placeholder="field.placeholder"
+              @change="updatePresetField(field.key, ($event.target as HTMLInputElement).value)"
+            />
+            <div v-if="field.hint" class="wf-form-hint">{{ field.hint }}</div>
+          </div>
+          <div v-if="(matchedPreset.actions ?? []).length && !readonly" class="wf-form-group">
+            <div class="wf-preset-actions">
+              <button
+                v-for="action in matchedPreset.actions ?? []"
+                :key="action.key"
+                type="button"
+                class="wf-preset-action-btn"
+                :style="matchedPreset.color ? { borderColor: matchedPreset.color, color: matchedPreset.color } : undefined"
+                @click="firePresetAction(action.key)"
+              >
+                {{ action.label }}
+              </button>
+            </div>
+          </div>
+        </template>
       </template>
 
       <!-- ========== CONDITION ========== -->
@@ -2444,5 +2696,69 @@ async function runReExecute() {
 .wf-cron-preset-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.wf-fixed-agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.wf-fixed-agent__icon {
+  font-size: 18px;
+  line-height: 1.2;
+}
+.wf-fixed-agent__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.wf-fixed-agent__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+.wf-fixed-agent__desc {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+}
+.wf-preset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wf-preset-action-btn {
+  padding: 5px 14px;
+  border: 1px solid #6366f1;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6366f1;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.wf-preset-action-btn:hover {
+  background: #eef2ff;
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.18);
+}
+.wf-preset-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.wf-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+}
+.wf-switch-row input {
+  accent-color: #6366f1;
 }
 </style>

@@ -17,6 +17,7 @@
 package com.yangqiongai.ai.open.capability.controller;
 
 import com.yangqiongai.ai.common.bean.ApiResult;
+import com.yangqiongai.ai.common.net.SafeUrlDownloader;
 import com.yangqiongai.ai.open.capability.catalog.CapabilityCatalog;
 import com.yangqiongai.ai.open.capability.context.DataContextHub;
 import com.yangqiongai.ai.open.capability.engine.CapabilityEngine;
@@ -185,6 +186,193 @@ class OpenCapabilityControllerTest {
         assertThat(result.isSuccess()).isFalse();
     }
 
+    @Test
+    @DisplayName("URL直传：capability缺失返回失败")
+    void urlUploadFailsWhenCapabilityMissing() {
+        OpenCapabilityController.FileUrlUploadRequest request = new OpenCapabilityController.FileUrlUploadRequest();
+        request.setFileUrl("http://example.com/a.pdf");
+
+        ApiResult<Map<String, Object>> result = controller.uploadCapabilityFileByUrl(request);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("capability");
+    }
+
+    @Test
+    @DisplayName("URL直传：fileUrl缺失返回失败")
+    void urlUploadFailsWhenFileUrlMissing() {
+        OpenCapabilityController.FileUrlUploadRequest request = new OpenCapabilityController.FileUrlUploadRequest();
+        request.setCapability("demo");
+
+        ApiResult<Map<String, Object>> result = controller.uploadCapabilityFileByUrl(request);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("fileUrl");
+    }
+
+    @Test
+    @DisplayName("URL直传：能力不存在返回失败")
+    void urlUploadFailsWhenCapabilityNotFound() {
+        when(catalog.get("ghost")).thenReturn(null);
+        OpenCapabilityController.FileUrlUploadRequest request = new OpenCapabilityController.FileUrlUploadRequest();
+        request.setCapability("ghost");
+        request.setFileUrl("http://example.com/a.pdf");
+
+        ApiResult<Map<String, Object>> result = controller.uploadCapabilityFileByUrl(request);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("能力不存在");
+    }
+
+    @Test
+    @DisplayName("URL直传：未配置文件上传库返回失败")
+    void urlUploadFailsWhenUploadKbNotConfigured() {
+        when(catalog.get("demo")).thenReturn(baseSpec());
+        OpenCapabilityController.FileUrlUploadRequest request = new OpenCapabilityController.FileUrlUploadRequest();
+        request.setCapability("demo");
+        request.setFileUrl("http://example.com/a.pdf");
+
+        ApiResult<Map<String, Object>> result = controller.uploadCapabilityFileByUrl(request);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("文件上传库");
+    }
+
+    @Test
+    @DisplayName("URL直传：入库组件未装配返回失败")
+    void urlUploadFailsWhenIngestPortMissing() {
+        when(catalog.get("demo")).thenReturn(specWithUploadKb());
+        when(ingestPortProvider.getIfAvailable()).thenReturn(null);
+        controller.setSafeUrlDownloader(org.mockito.Mockito.mock(SafeUrlDownloader.class));
+        OpenCapabilityController.FileUrlUploadRequest request = new OpenCapabilityController.FileUrlUploadRequest();
+        request.setCapability("demo");
+        request.setFileUrl("http://example.com/a.pdf");
+
+        ApiResult<Map<String, Object>> result = controller.uploadCapabilityFileByUrl(request);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("文件入库组件未装配");
+    }
+
+    @Test
+    @DisplayName("URL直传：拉取组件未装配返回失败")
+    void urlUploadFailsWhenDownloaderMissing() {
+        when(catalog.get("demo")).thenReturn(specWithUploadKb());
+        when(ingestPortProvider.getIfAvailable())
+                .thenReturn(org.mockito.Mockito.mock(CapabilityDocumentIngestPort.class));
+        OpenCapabilityController.FileUrlUploadRequest request = new OpenCapabilityController.FileUrlUploadRequest();
+        request.setCapability("demo");
+        request.setFileUrl("http://example.com/a.pdf");
+
+        ApiResult<Map<String, Object>> result = controller.uploadCapabilityFileByUrl(request);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("URL拉取组件未装配");
+    }
+
+    @Test
+    @DisplayName("URL直传：成功拉取并入库返回文档信息")
+    void urlUploadSucceeds() throws Exception {
+        CapabilityDocumentIngestPort ingestPort = org.mockito.Mockito.mock(CapabilityDocumentIngestPort.class);
+        CapabilityDocumentIngestPort.IngestResult ingestResult = new CapabilityDocumentIngestPort.IngestResult();
+        ingestResult.setDocId("doc-1");
+        ingestResult.setKbId("kb-open");
+        ingestResult.setDocStatus("INDEXING");
+        when(ingestPort.ingest(org.mockito.ArgumentMatchers.eq("kb-open"),
+                org.mockito.ArgumentMatchers.eq("a.pdf"),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("application/pdf")))
+                .thenReturn(ingestResult);
+        when(catalog.get("demo")).thenReturn(specWithUploadKb());
+        when(ingestPortProvider.getIfAvailable()).thenReturn(ingestPort);
+        SafeUrlDownloader downloader = org.mockito.Mockito.mock(SafeUrlDownloader.class);
+        SafeUrlDownloader.Result fetched = new SafeUrlDownloader.Result();
+        fetched.setFileName("a.pdf");
+        fetched.setContentType("application/pdf");
+        fetched.setBytes("file-bytes".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        when(downloader.fetch("http://example.com/a.pdf")).thenReturn(fetched);
+        controller.setSafeUrlDownloader(downloader);
+        OpenCapabilityController.FileUrlUploadRequest request = new OpenCapabilityController.FileUrlUploadRequest();
+        request.setCapability("demo");
+        request.setFileUrl("http://example.com/a.pdf");
+
+        ApiResult<Map<String, Object>> result = controller.uploadCapabilityFileByUrl(request);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().get("docId")).isEqualTo("doc-1");
+        assertThat(result.getData().get("kbId")).isEqualTo("kb-open");
+        assertThat(result.getData().get("capability")).isEqualTo("demo");
+        assertThat(result.getData().get("sourceUrl")).isEqualTo("http://example.com/a.pdf");
+    }
+
+    @Test
+    @DisplayName("URL直传：请求体fileName优先于下载解析文件名")
+    void urlUploadPrefersExplicitFileName() throws Exception {
+        CapabilityDocumentIngestPort ingestPort = org.mockito.Mockito.mock(CapabilityDocumentIngestPort.class);
+        CapabilityDocumentIngestPort.IngestResult ingestResult = new CapabilityDocumentIngestPort.IngestResult();
+        ingestResult.setDocId("doc-2");
+        when(ingestPort.ingest(org.mockito.ArgumentMatchers.eq("kb-open"),
+                org.mockito.ArgumentMatchers.eq("自定义名.pdf"),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(ingestResult);
+        when(catalog.get("demo")).thenReturn(specWithUploadKb());
+        when(ingestPortProvider.getIfAvailable()).thenReturn(ingestPort);
+        SafeUrlDownloader downloader = org.mockito.Mockito.mock(SafeUrlDownloader.class);
+        SafeUrlDownloader.Result fetched = new SafeUrlDownloader.Result();
+        fetched.setFileName("a.pdf");
+        fetched.setBytes(new byte[0]);
+        when(downloader.fetch("http://example.com/a.pdf")).thenReturn(fetched);
+        controller.setSafeUrlDownloader(downloader);
+        OpenCapabilityController.FileUrlUploadRequest request = new OpenCapabilityController.FileUrlUploadRequest();
+        request.setCapability("demo");
+        request.setFileUrl("http://example.com/a.pdf");
+        request.setFileName("自定义名.pdf");
+
+        ApiResult<Map<String, Object>> result = controller.uploadCapabilityFileByUrl(request);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("URL直传：拉取异常转为失败响应")
+    void urlUploadFailsWhenFetchThrows() throws Exception {
+        SafeUrlDownloader downloader = org.mockito.Mockito.mock(SafeUrlDownloader.class);
+        when(downloader.fetch("http://example.com/bad.pdf"))
+                .thenThrow(new java.io.IOException("URL指向内网或保留地址，禁止拉取"));
+        when(catalog.get("demo")).thenReturn(specWithUploadKb());
+        when(ingestPortProvider.getIfAvailable())
+                .thenReturn(org.mockito.Mockito.mock(CapabilityDocumentIngestPort.class));
+        controller.setSafeUrlDownloader(downloader);
+        OpenCapabilityController.FileUrlUploadRequest request = new OpenCapabilityController.FileUrlUploadRequest();
+        request.setCapability("demo");
+        request.setFileUrl("http://example.com/bad.pdf");
+
+        ApiResult<Map<String, Object>> result = controller.uploadCapabilityFileByUrl(request);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("URL附件入库失败");
+        assertThat(result.getMessage()).contains("内网或保留地址");
+    }
+
+    @Test
+    @DisplayName("URL直传：SSRF拒绝调用内网地址返回失败")
+    void urlUploadRejectsInternalAddress() throws Exception {
+        when(catalog.get("demo")).thenReturn(specWithUploadKb());
+        when(ingestPortProvider.getIfAvailable())
+                .thenReturn(org.mockito.Mockito.mock(CapabilityDocumentIngestPort.class));
+        // 真实下载器：内网地址在连接前即被拦截
+        controller.setSafeUrlDownloader(new SafeUrlDownloader(1024 * 1024, 2000, 2000, 2));
+        OpenCapabilityController.FileUrlUploadRequest request = new OpenCapabilityController.FileUrlUploadRequest();
+        request.setCapability("demo");
+        request.setFileUrl("http://127.0.0.1:8082/open/v1/capabilities");
+
+        ApiResult<Map<String, Object>> result = controller.uploadCapabilityFileByUrl(request);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("内网或保留地址");
+    }
+
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> hintsOf(ApiResult<Map<String, Object>> result) {
         return (List<Map<String, Object>>) result.getData().get("argumentHints");
@@ -197,6 +385,22 @@ class OpenCapabilityControllerTest {
         spec.setDescription("演示");
         spec.setVersion("1.0.0");
         spec.setCategory("test");
+        return spec;
+    }
+
+    /**
+     * 构造已配置文件上传库的能力规格
+     * @return
+     */
+    private CapabilitySpec specWithUploadKb() {
+        CapabilitySpec spec = baseSpec();
+        com.yangqiongai.ai.open.capability.spec.AgentOverrides.KnowledgeBaseOverride kb =
+                new com.yangqiongai.ai.open.capability.spec.AgentOverrides.KnowledgeBaseOverride();
+        kb.setUploadKbCode("kb-open");
+        com.yangqiongai.ai.open.capability.spec.AgentOverrides overrides =
+                new com.yangqiongai.ai.open.capability.spec.AgentOverrides();
+        overrides.setKnowledgeBase(kb);
+        spec.setAgentOverrides(overrides);
         return spec;
     }
 }

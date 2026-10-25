@@ -26,6 +26,9 @@ import com.yangqiongai.ai.open.capability.catalog.CapabilityDefinitionHistory;
 import com.yangqiongai.ai.open.capability.catalog.CapabilityDefinitionHistoryRepository;
 import com.yangqiongai.ai.open.capability.catalog.CapabilityDefinitionRepository;
 import com.yangqiongai.ai.open.capability.catalog.CapabilityLoader;
+import com.yangqiongai.ai.open.capability.engine.CapabilityDebugResponse;
+import com.yangqiongai.ai.open.capability.engine.CapabilityEngine;
+import com.yangqiongai.ai.open.capability.engine.CapabilityRequest;
 import com.yangqiongai.ai.open.capability.spec.AgentOverrides;
 import com.yangqiongai.ai.open.capability.spec.CapabilitySpec;
 import com.yangqiongai.ai.open.capability.trace.CapabilityCallRecord;
@@ -80,17 +83,20 @@ public class OpenCapabilityAdminController {
     private final CapabilityCategoryRepository categoryRepository;
     private final CapabilityCallRepository callRepository;
     private final CapabilityDefinitionHistoryRepository historyRepository;
+    private final CapabilityEngine capabilityEngine;
 
     public OpenCapabilityAdminController(CapabilityCatalog catalog,
                                           CapabilityDefinitionRepository definitionRepository,
                                           CapabilityCategoryRepository categoryRepository,
                                           CapabilityCallRepository callRepository,
-                                          CapabilityDefinitionHistoryRepository historyRepository) {
+                                          CapabilityDefinitionHistoryRepository historyRepository,
+                                          CapabilityEngine capabilityEngine) {
         this.catalog = catalog;
         this.definitionRepository = definitionRepository;
         this.categoryRepository = categoryRepository;
         this.callRepository = callRepository;
         this.historyRepository = historyRepository;
+        this.capabilityEngine = capabilityEngine;
     }
 
     /**
@@ -416,6 +422,22 @@ public class OpenCapabilityAdminController {
         result.put("list", pageItems);
         result.put("total", total);
         return ApiResult.ok(result);
+    }
+
+    /**
+     * 调试执行能力（分步返回全流程中间结果：入参校验/Prompt渲染/Agent执行/契约校验）
+     * @param code 能力编码
+     * @param body 调用入参（arguments字段，键值与能力入参Schema对齐）
+     * @return
+     */
+    @PostMapping("/{code}/debug")
+    public ApiResult<CapabilityDebugResponse> debug(@PathVariable String code,
+                                                    @RequestBody(required = false) Map<String, Object> body) {
+        CapabilityRequest request = new CapabilityRequest();
+        request.setCapability(code);
+        request.setArguments(body == null ? Map.of() : body);
+        request.setCaller("admin-debug");
+        return ApiResult.ok(capabilityEngine.debugInvoke(request));
     }
 
     /**

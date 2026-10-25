@@ -298,11 +298,25 @@ public class WorkflowStateService {
         StringBuilder output = new StringBuilder();
 
         Set<String> endPredecessorIds = new java.util.HashSet<>();
+        Set<String> endNodeIds = new java.util.HashSet<>();
         if (definition != null && definition.getEdges() != null) {
             for (WorkflowEdge edge : definition.getEdges()) {
                 WorkflowNode targetNode = definition.findNode(edge.getTargetId());
                 if (targetNode != null && targetNode.getType() == NodeType.END) {
                     endPredecessorIds.add(edge.getSourceId());
+                    endNodeIds.add(edge.getTargetId());
+                }
+            }
+        }
+
+        // END节点配置了结束输出模板时自身输出非空，最终输出直接取它，不再汇总前驱
+        if (state.getNodeStates() != null) {
+            for (String endId : endNodeIds) {
+                NodeExecutionStatus endStatus = state.getNodeStates().get(endId);
+                if (endStatus != null && endStatus.isCompleted() && endStatus.getOutput() != null
+                        && endStatus.getOutput().getOutputAsText() != null
+                        && !endStatus.getOutput().getOutputAsText().isEmpty()) {
+                    return endStatus.getOutput().getOutputAsText();
                 }
             }
         }

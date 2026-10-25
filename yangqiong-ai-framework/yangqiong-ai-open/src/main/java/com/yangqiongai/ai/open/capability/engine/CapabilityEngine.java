@@ -23,6 +23,7 @@ import com.yangqiongai.ai.agent.core.prompt.PromptResolver;
 import com.yangqiongai.ai.agent.core.trace.ErrorCategorizer;
 import com.yangqiongai.ai.common.enums.PromptCategory;
 import com.yangqiongai.ai.common.prompt.Prompt;
+import com.yangqiongai.ai.common.scope.ScopeContext;
 import com.yangqiongai.ai.open.capability.catalog.CapabilityCatalog;
 import com.yangqiongai.ai.open.capability.catalog.CapabilityNotFoundException;
 import com.yangqiongai.ai.open.capability.context.DataContextHub;
@@ -139,13 +140,8 @@ public class CapabilityEngine {
 
             // 入参校验：优先内联Schema内容（数据库创建的能力），回退classpath Schema文件
             if (request.getArguments() != null) {
-                com.yangqiongai.ai.open.capability.guard.ValidationResult inputResult = null;
-                if (spec.getInputSchemaContent() != null && !spec.getInputSchemaContent().isBlank()) {
-                    inputResult = inputValidator.validate(request.getArguments(), spec.getInputSchemaContent());
-                } else if (spec.getInputSchema() != null && !spec.getInputSchema().isBlank()) {
-                    String schemaPath = "capabilities/" + spec.getCode() + "/" + spec.getInputSchema();
-                    inputResult = jsonValidator.validate(request.getArguments(), schemaPath);
-                }
+                com.yangqiongai.ai.open.capability.guard.ValidationResult inputResult =
+                        validateInputArguments(spec, request.getArguments());
                 if (inputResult != null && !inputResult.isValid()) {
                     log.warn("入参校验失败: capability={}, errors={}", request.getCapability(), inputResult.getErrors());
                     CapabilityResponse inputResponse = CapabilityResponse.failure(
@@ -256,6 +252,177 @@ public class CapabilityEngine {
     }
 
     /**
+     * 调试执行能力（分步返回全流程中间结果）
+     * <p>
+     * 复用与invoke相同的执行链路，逐步返回：入参校验 → Prompt渲染 → Agent执行 → 契约校验，
+     * 供管理后台测试界面展示各步骤产物，帮助理解能力调用过程与定位问题。
+     * 调试调用不重复执行去重缓存，也不上报提示词统计数据。
+     * </p>
+     * @param request
+     * @return
+     */
+    public CapabilityDebugResponse debugInvoke(CapabilityRequest request) {
+        long startTime = System.currentTimeMillis();
+        String callId = UUID.randomUUID().toString().replace("-", "");
+        CapabilityDebugResponse response = new CapabilityDebugResponse();
+        response.setCallId(callId);
+        try {
+            CapabilitySpec spec = resolveSpec(request.getCapability());
+
+            // 数据上下文校验（required=true时必须提供上下文）
+            if (spec.getContext() != null && spec.getContext().isRequired()
+                    && (request.getDataContextRefs() == null || request.getDataContextRefs().isEmpty())) {
+                response.setSuccess(false);
+                response.setErrorMessage("数据上下文为必填项，请先推送数据上下文");
+                response.setDurationMillis(System.currentTimeMillis() - startTime);
+                return response;
+            }
+
+            // 步骤1：入参校验
+            if (request.getArguments() != null) {
+                com.yangqiongai.ai.open.capability.guard.ValidationResult inputResult =
+                        validateInputArguments(spec, request.getArguments());
+                if (inputResult != null && !inputResult.isValid()) {
+                    response.setInputValidation(CapabilityDebugResponse.DebugStep.fail(inputResult.getErrors()));
+                    response.setSuccess(false);
+                    response.setErrorMessage("入参校验失败: " + String.join("; ", inputResult.getErrors()));
+                    response.setDurationMillis(System.currentTimeMillis() - startTime);
+                    return response;
+                }
+            }
+            response.setInputValidation(CapabilityDebugResponse.DebugStep.pass(
+                    spec.getInputSchemaContent() != null || spec.getInputSchema() != null
+                            ? "入参符合输入Schema定义" : "能力未配置输入Schema，跳过校验"));
+
+            // 步骤2：渲染Prompt模板
+            String prompt = renderPrompt(spec, request);
+            response.setRenderedPrompt(prompt);
+
+            // 步骤3：调用Agent引擎
+            AgentResult agentResult = invokeWithRetry(spec, prompt, request);
+            String outputText = agentResult.getOutputAsText();
+            response.setAgentOutput(outputText);
+            if (agentResult.getTokenMetrics() != null) {
+                response.setTokenMetrics(JSON_MAPPER.convertValue(agentResult.getTokenMetrics(), Map.class));
+            }
+            if (!agentResult.isSuccess()) {
+                response.setAgentExecution(CapabilityDebugResponse.DebugStep.fail(
+                        List.of(agentResult.getErrorMessage() != null
+                                ? agentResult.getErrorMessage() : "Agent执行失败")));
+                response.setSuccess(false);
+                response.setErrorMessage(agentResult.getErrorMessage() != null
+                        ? agentResult.getErrorMessage() : "Agent执行失败");
+                response.setDurationMillis(System.currentTimeMillis() - startTime);
+                recordCall(request, spec, toFailureResponse(response), startTime);
+                return response;
+            }
+            response.setAgentExecution(CapabilityDebugResponse.DebugStep.pass("Agent执行成功"));
+
+            // 步骤4：输出解析与契约校验
+            Object structuredOutput = tryParseJson(outputText);
+            boolean forceStructured = spec.getContract() != null && spec.getContract().isForceStructured();
+            if (forceStructured && structuredOutput == null
+                    && spec.getContract().isAutoRepair()) {
+                // 与invoke行为一致：解析失败先尝试自动修复，仍失败再判定不通过
+                try {
+                    structuredOutput = schemaGuard.validateAndRepair(outputText, spec, null);
+                } catch (Exception e) {
+                    log.warn("调试调用输出自动修复失败: capability={}", request.getCapability(), e);
+                }
+            }
+            if (forceStructured && structuredOutput == null) {
+                response.setOutputContract(CapabilityDebugResponse.DebugStep.fail(
+                        List.of("输出不是有效的JSON格式")));
+                response.setSuccess(false);
+                response.setErrorMessage("输出不是有效的JSON格式");
+                response.setDurationMillis(System.currentTimeMillis() - startTime);
+                recordCall(request, spec, toFailureResponse(response), startTime);
+                return response;
+            }
+            if (spec.getContract() != null && spec.getContract().isStrict()
+                    && (spec.getOutputSchema() != null || spec.getOutputSchemaContent() != null)) {
+                try {
+                    structuredOutput = schemaGuard.validate(structuredOutput != null
+                            ? structuredOutput : outputText, spec);
+                    response.setOutputContract(CapabilityDebugResponse.DebugStep.pass("输出符合契约定义"));
+                } catch (Exception e) {
+                    if (spec.getContract().isAutoRepair()) {
+                        structuredOutput = schemaGuard.validateAndRepair(
+                                structuredOutput != null ? structuredOutput : outputText, spec, null);
+                        response.setOutputContract(CapabilityDebugResponse.DebugStep.pass(
+                                "契约校验未通过，已自动修复输出"));
+                    } else {
+                        response.setOutputContract(CapabilityDebugResponse.DebugStep.fail(
+                                List.of(e.getMessage() != null ? e.getMessage() : "输出契约校验失败")));
+                        response.setSuccess(false);
+                        response.setErrorMessage("输出契约校验失败: "
+                                + (e.getMessage() != null ? e.getMessage() : "未知原因"));
+                        response.setDurationMillis(System.currentTimeMillis() - startTime);
+                        recordCall(request, spec, toFailureResponse(response), startTime);
+                        return response;
+                    }
+                }
+            } else {
+                response.setOutputContract(CapabilityDebugResponse.DebugStep.pass(
+                        spec.getContract() == null || !spec.getContract().isStrict()
+                                ? "未开启严格契约校验，跳过" : "能力未配置输出Schema，跳过"));
+            }
+            response.setStructuredOutput(structuredOutput);
+            response.setSuccess(true);
+            response.setDurationMillis(System.currentTimeMillis() - startTime);
+
+            // 记录调用追踪（与invoke同一审计链路）
+            CapabilityResponse trackResponse = CapabilityResponse.success(outputText, structuredOutput);
+            trackResponse.setCallId(callId);
+            trackResponse.setDurationMillis(response.getDurationMillis());
+            recordCall(request, spec, trackResponse, startTime);
+            return response;
+
+        } catch (CapabilityNotFoundException e) {
+            response.setSuccess(false);
+            response.setErrorMessage(e.getMessage());
+            response.setDurationMillis(System.currentTimeMillis() - startTime);
+            return response;
+        } catch (Exception e) {
+            log.error("能力调试执行异常: capability={}", request.getCapability(), e);
+            response.setSuccess(false);
+            response.setErrorMessage("能力执行异常: " + e.getMessage());
+            response.setDurationMillis(System.currentTimeMillis() - startTime);
+            return response;
+        }
+    }
+
+    /**
+     * 构造调用追踪用的失败响应（复用recordCall审计逻辑）
+     * @param debugResponse
+     * @return
+     */
+    private CapabilityResponse toFailureResponse(CapabilityDebugResponse debugResponse) {
+        CapabilityResponse trackResponse = CapabilityResponse.failure(debugResponse.getErrorMessage());
+        trackResponse.setCallId(debugResponse.getCallId());
+        trackResponse.setDurationMillis(debugResponse.getDurationMillis());
+        return trackResponse;
+    }
+
+    /**
+     * 入参Schema校验（优先内联Schema内容，回退classpath Schema文件）
+     * @param spec 能力规格
+     * @param arguments 调用入参
+     * @return 校验结果（未配置Schema时返回null）
+     */
+    private com.yangqiongai.ai.open.capability.guard.ValidationResult validateInputArguments(
+            CapabilitySpec spec, Map<String, Object> arguments) {
+        if (spec.getInputSchemaContent() != null && !spec.getInputSchemaContent().isBlank()) {
+            return inputValidator.validate(arguments, spec.getInputSchemaContent());
+        }
+        if (spec.getInputSchema() != null && !spec.getInputSchema().isBlank()) {
+            String schemaPath = "capabilities/" + spec.getCode() + "/" + spec.getInputSchema();
+            return jsonValidator.validate(arguments, schemaPath);
+        }
+        return null;
+    }
+
+    /**
      * 调用Agent引擎
      */
     private AgentResult invokeWithRetry(CapabilitySpec spec, String prompt, CapabilityRequest request) {
@@ -339,13 +506,8 @@ public class CapabilityEngine {
         }
         // 入参校验：优先内联Schema内容（数据库创建的能力），回退classpath Schema文件
         if (request.getArguments() != null) {
-            com.yangqiongai.ai.open.capability.guard.ValidationResult inputResult = null;
-            if (spec.getInputSchemaContent() != null && !spec.getInputSchemaContent().isBlank()) {
-                inputResult = inputValidator.validate(request.getArguments(), spec.getInputSchemaContent());
-            } else if (spec.getInputSchema() != null && !spec.getInputSchema().isBlank()) {
-                String schemaPath = "capabilities/" + spec.getCode() + "/" + spec.getInputSchema();
-                inputResult = jsonValidator.validate(request.getArguments(), schemaPath);
-            }
+            com.yangqiongai.ai.open.capability.guard.ValidationResult inputResult =
+                    validateInputArguments(spec, request.getArguments());
             if (inputResult != null && !inputResult.isValid()) {
                 throw new CapabilityExecutionException("入参校验失败: " + String.join("; ", inputResult.getErrors()));
             }
@@ -512,7 +674,7 @@ public class CapabilityEngine {
             record.setId(response.getCallId());
             record.setCapability(request.getCapability());
             record.setCaller(request.getCaller());
-            record.setScopeId(request.getScopeId());
+            record.setScopeId(ScopeContext.getScopeId());
             record.setDedupKey(request.getDedupKey());
             record.setStatus(response.isSuccess() ? "success" : "failure");
             record.setDurationMillis(response.getDurationMillis());

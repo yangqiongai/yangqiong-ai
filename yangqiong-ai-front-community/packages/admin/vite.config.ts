@@ -36,6 +36,9 @@ export default defineConfig({
       '/open/v1': {
         target: 'http://localhost:8082',
         changeOrigin: true,
+        // SSE 长连接（/run/stream）依赖：禁用代理与socket超时，避免流式响应被中途截断
+        timeout: 0,
+        proxyTimeout: 0,
       },
       // A2A 代理卡 well-known 端点
       '/.well-known': {

@@ -233,11 +233,57 @@ public class AgentTaskTracker {
     public void markRunning(String taskId, String step) {
         AgentTaskRecord record = taskStore.get(taskId);
         if (record != null) {
+            // 终态任务不允许回到运行态（含任务被外部交互层先行中止的场景）
+            if (isTerminal(record.getStatus())) {
+                return;
+            }
             record.setStatus(AgentTaskRecord.TaskStatus.RUNNING);
+            record.setPendingAt(null);
             record.setCurrentStep(step);
             appendLog(taskId, step, "RUNNING", "任务开始运行");
         }
         persistenceService.markRunning(taskId);
+    }
+
+    /**
+     * 标记任务因澄清/审批挂起，等待外部答复或审批处理后恢复
+     * @param taskId
+     * @param pendingStatus 挂起状态（PENDING_CLARIFICATION/PENDING_APPROVAL）
+     * @param step 挂起步骤描述
+     */
+    public void markPendingInteraction(String taskId, AgentTaskRecord.TaskStatus pendingStatus, String step) {
+        AgentTaskRecord record = taskStore.get(taskId);
+        if (record != null && isTerminal(record.getStatus())) {
+            return;
+        }
+        if (record != null) {
+            record.setStatus(pendingStatus);
+            record.setPendingAt(LocalDateTime.now());
+            record.setCurrentStep(step);
+            appendLog(taskId, step, pendingStatus.name(), "任务挂起等待交互处理");
+        }
+        persistenceService.updateTaskStatus(taskId, pendingStatus.name(), "", 0L, null);
+    }
+
+    /**
+     * 判断任务状态是否为终态
+     * @param status
+     * @return
+     */
+    private boolean isTerminal(AgentTaskRecord.TaskStatus status) {
+        return status == AgentTaskRecord.TaskStatus.SUCCEEDED
+                || status == AgentTaskRecord.TaskStatus.FAILED
+                || status == AgentTaskRecord.TaskStatus.CANCELLED;
+    }
+
+    /**
+     * 判断任务是否可被标记完成（仅未开始/运行中可完成，挂起态由续跑链路收尾）
+     * @param status
+     * @return
+     */
+    private boolean isCompletable(AgentTaskRecord.TaskStatus status) {
+        return status == AgentTaskRecord.TaskStatus.PENDING
+                || status == AgentTaskRecord.TaskStatus.RUNNING;
     }
 
     /**
@@ -247,6 +293,11 @@ public class AgentTaskTracker {
      */
     public void markCompleted(String taskId, AgentResult result) {
         AgentTaskRecord record = taskStore.get(taskId);
+        if (record != null && !isCompletable(record.getStatus())) {
+            // 终态或挂起态不覆盖：挂起态由续跑链路收尾，先写的失败/取消结果不被截断结果覆盖
+            log.info("跳过完成标记，任务已处于{}态: taskId={}", record.getStatus(), taskId);
+            return;
+        }
         long durationMs = record != null && record.getStartedAt() != null
                 ? Duration.between(record.getStartedAt(), LocalDateTime.now()).toMillis()
                 : 0L;
@@ -295,12 +346,17 @@ public class AgentTaskTracker {
      */
     public void markFailed(String taskId, String step, String error) {
         AgentTaskRecord record = taskStore.get(taskId);
+        if (record != null && isTerminal(record.getStatus())) {
+            // 已是终态（含交互层先行写失败）不覆盖，保留首次失败原因
+            return;
+        }
         long durationMs = record != null && record.getStartedAt() != null
                 ? Duration.between(record.getStartedAt(), LocalDateTime.now()).toMillis()
                 : 0L;
 
         if (record != null) {
             record.setStatus(AgentTaskRecord.TaskStatus.FAILED);
+            record.setPendingAt(null);
             record.setCurrentStep(step);
             record.setFinishedAt(LocalDateTime.now());
             record.setErrorMessage(error);
@@ -439,14 +495,18 @@ public class AgentTaskTracker {
         int memoryCount = 0;
         List<AgentTaskRecord> pendingTasks = new ArrayList<>();
         for (AgentTaskRecord record : taskStore.values()) {
-            if (record.getStatus() == AgentTaskRecord.TaskStatus.PENDING
-                    || record.getStatus() == AgentTaskRecord.TaskStatus.RUNNING) {
+            AgentTaskRecord.TaskStatus st = record.getStatus();
+            if (st == AgentTaskRecord.TaskStatus.PENDING
+                    || st == AgentTaskRecord.TaskStatus.RUNNING
+                    || st == AgentTaskRecord.TaskStatus.PENDING_CLARIFICATION
+                    || st == AgentTaskRecord.TaskStatus.PENDING_APPROVAL) {
                 pendingTasks.add(record);
             }
         }
         for (AgentTaskRecord record : pendingTasks) {
             AgentTaskRecord.TaskStatus prevStatus = record.getStatus();
             record.setStatus(AgentTaskRecord.TaskStatus.FAILED);
+            record.setPendingAt(null);
             record.setFinishedAt(LocalDateTime.now());
             record.setErrorMessage("服务重启，任务恢复时标记为失败");
             log.info("启动恢复未完成任务(内存): taskId={}, prevStatus={}", record.getTaskId(), prevStatus);
@@ -477,11 +537,18 @@ public class AgentTaskTracker {
                 if (record.getStartedAt() != null && record.getStartedAt().isBefore(now.minusMinutes(30))) {
                     staleTasks.add(record);
                 }
+            } else if (record.getStatus() == AgentTaskRecord.TaskStatus.PENDING_CLARIFICATION
+                    || record.getStatus() == AgentTaskRecord.TaskStatus.PENDING_APPROVAL) {
+                // 挂起态超过35分钟仍未被外部处理，视为孤儿任务（挂起时长基于pendingAt）
+                if (record.getPendingAt() != null && record.getPendingAt().isBefore(now.minusMinutes(35))) {
+                    staleTasks.add(record);
+                }
             }
         }
         for (AgentTaskRecord record : staleTasks) {
             AgentTaskRecord.TaskStatus prevStatus = record.getStatus();
             record.setStatus(AgentTaskRecord.TaskStatus.FAILED);
+            record.setPendingAt(null);
             record.setFinishedAt(now);
             record.setErrorMessage("任务超时未完成，被恢复调度标记为失败");
             log.info("恢复超时任务(内存): taskId={}, prevStatus={}, status=FAILED", record.getTaskId(), prevStatus);

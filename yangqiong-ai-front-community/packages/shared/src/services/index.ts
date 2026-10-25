@@ -18,7 +18,6 @@ import type { HttpRequest } from './http';
 import { createAgentApi } from './agent-api';
 import { createApprovalApi } from './approval-api';
 import { createConversationApi } from './conversation-api';
-import { createConnectorApi } from './connector-api';
 import { createEvaluationApi } from './evaluation-api';
 import { createEvolutionApi } from './evolution-api';
 import { createGraphApi } from './graph-api';
@@ -43,7 +42,6 @@ export type { HttpRequest } from './http';
 export { createAgentApi } from './agent-api';
 export { createApprovalApi } from './approval-api';
 export { createConversationApi } from './conversation-api';
-export { createConnectorApi } from './connector-api';
 export { createEvaluationApi } from './evaluation-api';
 export { createEvolutionApi } from './evolution-api';
 export { createGraphApi } from './graph-api';
@@ -95,7 +93,6 @@ export const createApiServices = (http: HttpRequest) => ({
   graph: createGraphApi(http),
   workflow: createWorkflowApi(http),
   conversation: createConversationApi(http),
-  connector: createConnectorApi(http),
   evaluation: createEvaluationApi(http),
   evolution: createEvolutionApi(http),
   approval: createApprovalApi(http),

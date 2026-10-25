@@ -33,7 +33,6 @@ export type * from './system';
 export type * from './memory';
 export type * from './prompt';
 export type * from './integration';
-export type * from './connector';
 export type * from './registry';
 export type * from './trace';
 export type * from './tool-policy';

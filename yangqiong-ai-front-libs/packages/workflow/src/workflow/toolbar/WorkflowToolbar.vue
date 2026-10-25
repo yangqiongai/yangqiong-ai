@@ -1,3 +1,20 @@
+<!--
+ * Copyright (C) 2026 yangqiong
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, version 3 of the License
+ * only ("AGPL-3.0-only") and not any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { WorkflowDefinition } from '../types/workflow'
@@ -17,6 +34,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'save'): void
+  (e: 'saveAsVersion'): void
   (e: 'load'): void
   (e: 'validate', result: { valid: boolean; errors: string[] }): void
   (e: 'export'): void
@@ -31,6 +49,10 @@ const emit = defineEmits<{
 
 function handleSave() {
   emit('save')
+}
+
+function handleSaveAsVersion() {
+  emit('saveAsVersion')
 }
 
 function handleLoad() {
@@ -72,9 +94,13 @@ const pauseEnabled = computed(() => props.enterpriseFeatures !== false)
         <span class="wf-toolbar__icon">📂</span>
         <span class="wf-toolbar__text">加载</span>
       </button>
-      <button class="wf-toolbar__btn wf-toolbar__btn--primary" title="保存工作流" @click="handleSave">
+      <button class="wf-toolbar__btn wf-toolbar__btn--primary" title="保存当前画布数据（原地覆盖当前版本，不产生新版本记录）" @click="handleSave">
         <span class="wf-toolbar__icon">💾</span>
         <span class="wf-toolbar__text">保存</span>
+      </button>
+      <button class="wf-toolbar__btn" title="另存为下一个版本：保留历史版本，创建version+1新记录" @click="handleSaveAsVersion">
+        <span class="wf-toolbar__icon">🗂</span>
+        <span class="wf-toolbar__text">存为新版本</span>
       </button>
     </div>
     <div class="wf-toolbar__group">

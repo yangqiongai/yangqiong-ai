@@ -54,7 +54,7 @@ public class StepRecordingManager {
     /**
      * 内部key：执行模式标记
      */
-    private static final String INTERNAL_EXECUTION_MODE = "_internalExecutionMode";
+    public static final String INTERNAL_EXECUTION_MODE = "_internalExecutionMode";
 
     /**
      * 内部key：录制taskId回写
@@ -278,6 +278,23 @@ public class StepRecordingManager {
             return TaskSource.STREAM;
         }
         return TaskSource.SYNC;
+    }
+
+    /**
+     * 判断是否同步执行模式
+     * <p>
+     * 同步执行（工作流节点、同步API等无人值守场景）没有人工交互通道，
+     * 澄清/审批暂停无法恢复续跑，调用方可据此关闭ask_user等交互能力；
+     * 未标记时与{@link #resolveSource}保持一致默认视为同步
+     * </p>
+     * @param request
+     * @return
+     */
+    public static boolean isSyncExecution(AgentRequest request) {
+        if (request == null || request.getBody() == null) {
+            return true;
+        }
+        return !"stream".equals(request.getBody().get(INTERNAL_EXECUTION_MODE));
     }
 
     /**

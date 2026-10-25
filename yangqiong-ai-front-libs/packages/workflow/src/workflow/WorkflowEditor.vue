@@ -1,5 +1,22 @@
+<!--
+ * Copyright (C) 2026 yangqiong
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, version 3 of the License
+ * only ("AGPL-3.0-only") and not any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
-import { ref, computed, watch, markRaw, nextTick, onMounted, type Component } from 'vue'
+import { ref, computed, watch, markRaw, nextTick, onMounted, provide, type Component } from 'vue'
 import { VueFlow, useVueFlow, type NodeTypesObject, type EdgeTypesObject } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -30,7 +47,7 @@ import NodeConfigPanel from './panels/NodeConfigPanel.vue'
 import EdgeConfigPanel from './panels/EdgeConfigPanel.vue'
 import WorkflowToolbar from './toolbar/WorkflowToolbar.vue'
 
-import type { WorkflowDefinition, NodeType, EdgeType, NodeApprovalConfig, TimeControlConfig, WorkflowNodeExecStatus, WorkflowNodeExecData, WorkflowEditorExecutionApi } from './types/workflow'
+import type { WorkflowDefinition, NodeType, EdgeType, NodeApprovalConfig, TimeControlConfig, WorkflowNodeExecStatus, WorkflowNodeExecData, WorkflowEditorExecutionApi, WorkflowAgentPreset, AgentPresetActionPayload } from './types/workflow'
 import {
   toVueFlowNodes,
   toVueFlowEdges,
@@ -49,8 +66,12 @@ const props = withDefaults(
     /** 是否启用企业版专属能力（审批/通知节点等），社区版传 false 时置灰 */
     enterpriseFeatures?: boolean
     agentOptions?: Array<{ code: string; name: string }>
+    /** Agent节点预设模板（宿主注入，如企业版专属Agent预设），未注入时不渲染预设UI */
+    agentPresets?: WorkflowAgentPreset[]
     /** 集成渠道下拉选项，供通知节点配置选择 */
     channelOptions?: Array<{ id: string; name: string; type?: string }>
+    /** 工作区下拉选项（仅服务端存储型），供本地节点等按工作区执行的定制节点配置选择 */
+    workspaceOptions?: Array<{ id: string; name: string }>
     /** 编辑器挂载后回传执行进度控制API，供宿主框架实时驱动画布 */
     registerApi?: (api: WorkflowEditorExecutionApi) => void
   }>(),
@@ -63,10 +84,12 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'update:modelValue', value: WorkflowDefinition): void
   (e: 'save', value: WorkflowDefinition): void
+  (e: 'saveAsVersion', value: WorkflowDefinition): void
   (e: 'execute', value: WorkflowDefinition): void
   (e: 'pause'): void
   (e: 'resume'): void
   (e: 'cancel'): void
+  (e: 'presetAction', payload: AgentPresetActionPayload): void
 }>()
 
 const nodeTypes: NodeTypesObject = {
@@ -99,6 +122,8 @@ const {
   onEdgeClick,
   onPaneClick,
   onConnect,
+  onConnectStart,
+  onConnectEnd,
   onNodesChange,
   onEdgesChange,
   onNodeDragStop,
@@ -131,7 +156,48 @@ const {
 // 画布就绪后适应视口：限制最大缩放为1，避免节点较少时被放大到充满视口
 onPaneReady((instance) => {
   instance.fitView({ padding: 0.3, maxZoom: 1, duration: 200 })
+  nextTick(markConnectedHandles)
 })
+
+// 标记已连接的连接点（有连线挂载的常显），未连接的由悬停节点时显示
+function markConnectedHandles() {
+  const canvas = canvasEl.value
+  if (!canvas) return
+  const connected = new Set<string>()
+  for (const edge of getEdges.value) {
+    connected.add(`${edge.source}::${edge.sourceHandle ?? 'default'}`)
+    connected.add(`${edge.target}::${edge.targetHandle ?? 'default'}`)
+  }
+  canvas.querySelectorAll('.vue-flow__handle').forEach((el) => {
+    const key = `${el.getAttribute('data-nodeid')}::${el.getAttribute('data-handleid') ?? 'default'}`
+    el.classList.toggle('wf-handle--connected', connected.has(key))
+  })
+}
+
+// 连接点状态随节点/边增删与外部定义同步刷新
+watch(
+  () => [getNodes.value.map((n) => n.id).join(','), getEdges.value],
+  () => nextTick(markConnectedHandles),
+  { deep: true },
+)
+
+// 拖线期间在画布根节点挂标记类，整体放开连接点便于瞄准落点
+onConnectStart(() => canvasEl.value?.classList.add('wf-connecting'))
+onConnectEnd(() => canvasEl.value?.classList.remove('wf-connecting'))
+
+// 悬停节点时挂标记类显示其连接点，移出后移除
+function markHoverNode(e: MouseEvent, entering: boolean) {
+  const target = e.target as HTMLElement | null
+  const nodeEl = target?.closest?.('.vue-flow__node') as HTMLElement | null
+  if (entering) {
+    nodeEl?.classList.add('wf-node--hover')
+    return
+  }
+  const to = e.relatedTarget as HTMLElement | null
+  if (nodeEl && !(to && nodeEl.contains(to))) {
+    nodeEl.classList.remove('wf-node--hover')
+  }
+}
 
 // 处理节点变化（拖动、删除等）
 onNodesChange((changes) => {
@@ -157,6 +223,7 @@ watch(
     const flowData = fromWorkflowDefinition(newVal)
     setNodes(flowData.nodes)
     setEdges(flowData.edges)
+    nextTick(markConnectedHandles)
     // 外部整包替换视为新的编辑起点，重置历史
     resetHistory()
   },
@@ -386,6 +453,10 @@ function handleSave() {
   emit('save', toWorkflowDefinition(getNodes.value, getEdges.value, props.modelValue))
 }
 
+function handleSaveAsVersion() {
+  emit('saveAsVersion', toWorkflowDefinition(getNodes.value, getEdges.value, props.modelValue))
+}
+
 // 生成不重复的元素 id（时间戳+随机后缀，避免同毫秒冲突）
 function genId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
@@ -576,6 +647,8 @@ onMounted(() => {
     },
     setNodeExecData,
   })
+  canvasEl.value?.addEventListener('mouseover', (e) => markHoverNode(e, true))
+  canvasEl.value?.addEventListener('mouseout', (e) => markHoverNode(e, false))
 })
 
 function onDragOver(event: DragEvent) {
@@ -587,12 +660,16 @@ function onDragOver(event: DragEvent) {
 
 function onDrop(event: DragEvent) {
   if (props.readonly) return
-  const type = event.dataTransfer?.getData('application/vueflow') as NodeType
-  if (!type) return
+  const raw = event.dataTransfer?.getData('application/vueflow')
+  if (!raw) return
+  // 按面板项key（浏览器节点等定制项携带唯一key）解析回节点类型与预设编码
+  const item = draggableNodeTypes.find((i) => (i.key || i.type) === raw)
+  const type = (item?.type ?? raw) as NodeType
+  const presetCode = item?.presetCode
 
   // 企业版专属节点在社区版不可用
-  if (isNodeLocked(type)) {
-    showToast(`${enterpriseNodeLabel(type)}为企业版专属功能，当前版本不可用`, 'error')
+  if (item ? isItemLocked(item) : isNodeLocked(type)) {
+    showToast(`${item?.label ?? enterpriseNodeLabel(type)}为企业版专属功能，当前版本不可用`, 'error')
     return
   }
 
@@ -605,15 +682,20 @@ function onDrop(event: DragEvent) {
   // 屏幕坐标换算为画布坐标，缩放/平移下仍落在鼠标位置
   const position = screenToFlowCoordinate({ x: event.clientX, y: event.clientY })
 
+  const config = defaultNodeConfig(type)
+  if (presetCode) {
+    applyAgentPresetToConfig(config, presetCode)
+  }
+
   addNodes([
     {
       id: genId(type.toLowerCase()),
       type: NODE_TYPE_MAP[type] || type.toLowerCase(),
       position,
       data: {
-        name: defaultNodeName(type),
+        name: item?.key ? item.label : defaultNodeName(type),
         type,
-        config: defaultNodeConfig(type),
+        config,
         approvalConfig: type === 'APPROVAL' ? defaultApprovalConfig() : undefined,
         timeControlConfig: type === 'TIME_CONTROL' ? defaultTimeControlConfig() : undefined,
       },
@@ -622,16 +704,31 @@ function onDrop(event: DragEvent) {
   syncToModel()
 }
 
-function onNodeDragStart(event: DragEvent, type: NodeType) {
+function onNodeDragStart(event: DragEvent, item: { type: NodeType; key?: string; label?: string }) {
   // 企业版专属节点在社区版禁止拖出
-  if (isNodeLocked(type)) {
-    showToast(`${enterpriseNodeLabel(type)}为企业版专属功能，当前版本不可用`, 'error')
+  if (isItemLocked(item)) {
+    showToast(`${item.label ?? enterpriseNodeLabel(item.type)}为企业版专属功能，当前版本不可用`, 'error')
     return
   }
   if (event.dataTransfer) {
-    event.dataTransfer.setData('application/vueflow', type)
+    event.dataTransfer.setData('application/vueflow', item.key || item.type)
     event.dataTransfer.effectAllowed = 'move'
   }
+}
+
+// 将Agent预设默认配置写入节点config（浏览器节点等面板定制项落点时应用，等价配置面板applyPreset）
+function applyAgentPresetToConfig(config: Record<string, any>, presetCode: string) {
+  const preset = (props.agentPresets ?? []).find((p) => p.code === presetCode)
+  if (!preset) return
+  for (const field of preset.fields ?? []) {
+    if (field.default !== undefined) {
+      config[field.key] = field.default
+    }
+  }
+  for (const [key, value] of Object.entries(preset.defaults ?? {})) {
+    config[key] = value
+  }
+  config.agentCode = preset.code
 }
 
 function defaultNodeName(type: NodeType): string {
@@ -692,10 +789,13 @@ function defaultTimeControlConfig(): TimeControlConfig {
   }
 }
 
-const draggableNodeTypes: { type: NodeType; label: string; icon: string; group: string }[] = [
+// 面板节点项（key用于同type定制项的唯一标识，如浏览器节点复用AGENT类型；enterpriseOnly标记社区版锁定项）
+const draggableNodeTypes: { type: NodeType; label: string; icon: string; group: string; key?: string; presetCode?: string; enterpriseOnly?: boolean }[] = [
   { type: 'START', label: '开始', icon: '▶️', group: '基础' },
   { type: 'END', label: '结束', icon: '⏹️', group: '基础' },
   { type: 'AGENT', label: 'Agent', icon: '🤖', group: '智能' },
+  { type: 'AGENT', key: 'AGENT_LOCAL', presetCode: 'localAgent', label: '工作区节点', icon: '📁', group: '智能' },
+  { type: 'AGENT', key: 'AGENT_BROWSER', presetCode: 'browser', label: '浏览器节点', icon: '🌐', group: '智能', enterpriseOnly: true },
   { type: 'APPROVAL', label: '审批节点', icon: '✋', group: '智能' },
   { type: 'NOTIFY', label: '通知节点', icon: '📢', group: '智能' },
   { type: 'CONDITION', label: '条件分支', icon: '🔀', group: '控制' },
@@ -718,6 +818,16 @@ const nodeGroups = computed(() => {
   return groups
 })
 
+// Agent节点预设模板按agentCode索引，provide给画布节点组件渲染专属视觉
+const agentPresetMap = computed(() => {
+  const map: Record<string, WorkflowAgentPreset> = {}
+  for (const preset of props.agentPresets ?? []) {
+    map[preset.code] = preset
+  }
+  return map
+})
+provide('wfAgentPresets', agentPresetMap)
+
 // 非企业版时审批/通知节点锁定（企业版专属能力，社区版不可用）
 const approvalLocked = computed(() => !props.enterpriseFeatures)
 
@@ -726,6 +836,12 @@ const ENTERPRISE_ONLY_TYPES: NodeType[] = ['APPROVAL', 'NOTIFY']
 
 function isNodeLocked(type: NodeType): boolean {
   return ENTERPRISE_ONLY_TYPES.includes(type) && approvalLocked.value
+}
+
+// 面板项锁定判定：审批/通知按类型锁，定制项（带key）由enterpriseOnly标记决定（浏览器节点为企业版专属，工作区节点双端可用）
+function isItemLocked(item: { type: NodeType; key?: string; enterpriseOnly?: boolean }): boolean {
+  if (item.key) return !!item.enterpriseOnly && approvalLocked.value
+  return isNodeLocked(item.type)
 }
 
 // 企业版专属节点名称（用于提示文案）
@@ -749,6 +865,7 @@ function enterpriseNodeLabel(type: NodeType): string {
       :paused="paused"
       :enterprise-features="enterpriseFeatures"
       @save="handleSave"
+      @save-as-version="handleSaveAsVersion"
       @load="handleLoad"
       @validate="handleValidate"
       @export="handleExport"
@@ -770,16 +887,16 @@ function enterpriseNodeLabel(type: NodeType): string {
           <div class="wf-sidebar__title">{{ group }}</div>
           <div
             v-for="item in items"
-            :key="item.type"
+            :key="item.key || item.type"
             class="wf-sidebar__item"
-            :class="{ 'wf-sidebar__item--disabled': isNodeLocked(item.type) }"
-            :draggable="!isNodeLocked(item.type)"
-            :title="isNodeLocked(item.type) ? `${item.label}为企业版专属功能，当前版本不可用` : ''"
-            @dragstart="onNodeDragStart($event, item.type)"
+            :class="{ 'wf-sidebar__item--disabled': isItemLocked(item) }"
+            :draggable="!isItemLocked(item)"
+            :title="isItemLocked(item) ? `${item.label}为企业版专属功能，当前版本不可用` : ''"
+            @dragstart="onNodeDragStart($event, item)"
           >
             <span class="wf-sidebar__icon">{{ item.icon }}</span>
             <span class="wf-sidebar__label">{{ item.label }}<span
-              v-if="isNodeLocked(item.type)"
+              v-if="isItemLocked(item)"
               class="wf-sidebar__lock"
               title="该节点为企业版能力，请升级至企业版使用"
             ><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" /></svg></span></span>
@@ -800,6 +917,7 @@ function enterpriseNodeLabel(type: NodeType): string {
           :edges-deletable="!readonly"
           :elements-deletable="!readonly"
           :delete-key-code="readonly ? null : 'Delete'"
+          :connection-radius="32"
         >
           <Background />
           <Controls />
@@ -829,7 +947,9 @@ function enterpriseNodeLabel(type: NodeType): string {
           :max-retries="selectedNode.data?.maxRetries"
           :node-options="branchTargetOptions"
           :agent-options="agentOptions"
+          :agent-presets="agentPresets"
           :channel-options="channelOptions"
+          :workspace-options="workspaceOptions"
           :definition="modelValue"
           :get-definition="buildCurrentDefinition"
           :exec-data="selectedNode ? nodeExecData[selectedNode.id] : undefined"
@@ -837,6 +957,7 @@ function enterpriseNodeLabel(type: NodeType): string {
           :readonly="readonly"
           @update="handleNodeUpdate"
           @delete="deleteSelectedNode"
+          @preset-action="(payload) => emit('presetAction', payload)"
         />
         <EdgeConfigPanel
           v-else-if="selectedEdge"
@@ -923,6 +1044,51 @@ function enterpriseNodeLabel(type: NodeType): string {
 .vue-flow__edge.selected .wf-edge--parallel {
   stroke: #6366f1;
   stroke-width: 3;
+}
+
+/* 连接点增强：加大尺寸与热区、悬停反馈，让连线更容易命中 */
+.vue-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: #6366f1;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.35);
+  cursor: crosshair;
+}
+.vue-flow__handle-top {
+  top: -6px;
+}
+.vue-flow__handle-bottom {
+  bottom: -6px;
+}
+.vue-flow__handle-left {
+  left: -6px;
+}
+.vue-flow__handle-right {
+  right: -6px;
+}
+.vue-flow__handle::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+}
+.vue-flow__handle:hover {
+  background: #4f46e5;
+  box-shadow: 0 0 0 5px rgba(99, 102, 241, 0.22);
+}
+/* 未连接的连接点默认隐藏，悬停节点或拖线时显示用于连接；已连接的常显 */
+.vue-flow__node .vue-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.vue-flow__node:hover .vue-flow__handle,
+.vue-flow__node.wf-node--hover .vue-flow__handle,
+.vue-flow__handle.wf-handle--connected,
+.wf-connecting .vue-flow__handle {
+  opacity: 1;
+  pointer-events: all;
 }
 
 /* 执行进度节点状态 */

@@ -150,7 +150,7 @@ public class WorkflowDefinitionService extends ServiceImpl<WorkflowDefinitionMap
     }
 
     /**
-     * 更新工作流定义（从DTO请求，以path name为准，创建新版本）
+     * 更新工作流定义（从DTO请求，以path name为准；asNewVersion为true时另存新版本，否则原地覆盖最新版本）
      * @param definitionName
      * @param request
      * @return
@@ -164,32 +164,56 @@ public class WorkflowDefinitionService extends ServiceImpl<WorkflowDefinitionMap
             return false;
         }
 
-        WorkflowDefinitionEntity newVersion = new WorkflowDefinitionEntity();
-        newVersion.setDefinitionName(definitionName);
-        newVersion.setVersion(existing.getVersion() + 1);
-        newVersion.setStatus(existing.getStatus());
-        newVersion.setCreateTime(LocalDateTime.now());
-        newVersion.setUpdateTime(LocalDateTime.now());
+        // 另存新版本：在最新版本基础上创建version+1新记录，历史版本保留
+        if (Boolean.TRUE.equals(request.getAsNewVersion())) {
+            WorkflowDefinitionEntity newVersion = new WorkflowDefinitionEntity();
+            newVersion.setDefinitionName(definitionName);
+            newVersion.setVersion(existing.getVersion() + 1);
+            newVersion.setStatus(existing.getStatus());
+            newVersion.setCreateTime(LocalDateTime.now());
+            newVersion.setUpdateTime(LocalDateTime.now());
 
-        newVersion.setDisplayName(request.getDisplayName() != null ? request.getDisplayName() : existing.getDisplayName());
-        newVersion.setDescription(request.getDescription() != null ? request.getDescription() : existing.getDescription());
-        newVersion.setCategory(request.getCategory() != null ? request.getCategory() : existing.getCategory());
-        newVersion.setRemark(request.getRemark() != null ? request.getRemark() : existing.getRemark());
+            newVersion.setDisplayName(request.getDisplayName() != null ? request.getDisplayName() : existing.getDisplayName());
+            newVersion.setDescription(request.getDescription() != null ? request.getDescription() : existing.getDescription());
+            newVersion.setCategory(request.getCategory() != null ? request.getCategory() : existing.getCategory());
+            newVersion.setRemark(request.getRemark() != null ? request.getRemark() : existing.getRemark());
 
+            if (request.getDefinition() != null) {
+                try {
+                    newVersion.setDefinitionJson(objectMapper.writeValueAsString(request.getDefinition()));
+                } catch (Exception e) {
+                    throw new RuntimeException("工作流定义序列化失败", e);
+                }
+            } else {
+                newVersion.setDefinitionJson(existing.getDefinitionJson());
+            }
+
+            save(newVersion);
+            log.info("更新工作流定义(新版本): name={}, version={}", definitionName, newVersion.getVersion());
+            eventPublisher.publishEvent(new WorkflowDefinitionSavedEvent(definitionName, newVersion.getDefinitionJson()));
+            return true;
+        }
+
+        // 原地覆盖最新版本：不新增记录，版本号不变（被覆盖内容不保留，历史版本仍可通过加载恢复）
+        WorkflowDefinitionEntity target = existing;
+        target.setDisplayName(request.getDisplayName() != null ? request.getDisplayName() : existing.getDisplayName());
+        target.setDescription(request.getDescription() != null ? request.getDescription() : existing.getDescription());
+        target.setCategory(request.getCategory() != null ? request.getCategory() : existing.getCategory());
+        target.setRemark(request.getRemark() != null ? request.getRemark() : existing.getRemark());
         if (request.getDefinition() != null) {
             try {
-                newVersion.setDefinitionJson(objectMapper.writeValueAsString(request.getDefinition()));
+                target.setDefinitionJson(objectMapper.writeValueAsString(request.getDefinition()));
             } catch (Exception e) {
                 throw new RuntimeException("工作流定义序列化失败", e);
             }
-        } else {
-            newVersion.setDefinitionJson(existing.getDefinitionJson());
         }
-
-        save(newVersion);
-        log.info("更新工作流定义(新版本): name={}, version={}", definitionName, newVersion.getVersion());
-        eventPublisher.publishEvent(new WorkflowDefinitionSavedEvent(definitionName, newVersion.getDefinitionJson()));
-        return true;
+        target.setUpdateTime(LocalDateTime.now());
+        boolean updated = updateById(target);
+        if (updated) {
+            log.info("更新工作流定义(原地覆盖): name={}, version={}", definitionName, target.getVersion());
+            eventPublisher.publishEvent(new WorkflowDefinitionSavedEvent(definitionName, target.getDefinitionJson()));
+        }
+        return updated;
     }
 
     /**

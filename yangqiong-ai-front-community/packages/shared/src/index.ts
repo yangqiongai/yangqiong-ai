@@ -18,6 +18,7 @@ export * from './types';
 export * from './constants';
 export * from './utils';
 export * from './services';
+export * from './chat/pending-sync';
 export * from './components/McpAppRenderer';
 export * from './components/governance/signal-hex';
 export * from './components/governance/enterprise-lock-icon';

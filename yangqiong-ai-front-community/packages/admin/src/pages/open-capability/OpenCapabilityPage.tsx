@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import React, { useState } from 'react';
-import { App, Button, Card, Input, Popconfirm, Space, Table } from 'antd';
+import { Alert, App, Button, Card, Input, Popconfirm, Space, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services';
@@ -23,6 +23,8 @@ import type { CapabilityCategoryNode, CapabilitySpec } from '@yangqiong/shared';
 import { CategoryTreePanel } from '@/components/CategoryTreePanel';
 import type { CategoryTreeService } from '@/components/CategoryTreePanel';
 import { CapabilityFormDrawer } from './CapabilityFormDrawer';
+import CapabilityTestDrawer from './CapabilityTestDrawer';
+import OpenApiTestDrawer from './OpenApiTestDrawer';
 
 const QUERY_KEY = 'open-capabilities';
 
@@ -52,6 +54,10 @@ export const OpenCapabilityPage: React.FC = () => {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<CapabilitySpec | null>(null);
+  /** 当前测试的能力 */
+  const [testing, setTesting] = useState<CapabilitySpec | null>(null);
+  /** 当前做开放接口对接测试的能力 */
+  const [apiTesting, setApiTesting] = useState<CapabilitySpec | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: [QUERY_KEY, page, size, keyword, categoryCode],
@@ -107,7 +113,7 @@ export const OpenCapabilityPage: React.FC = () => {
     { title: '分类', dataIndex: 'category', width: 110, ellipsis: true },
     {
       title: '操作',
-      width: 160,
+      width: 280,
       fixed: 'right',
       render: (_: unknown, record: CapabilitySpec) => (
         <Space size="small">
@@ -120,6 +126,24 @@ export const OpenCapabilityPage: React.FC = () => {
             }}
           >
             编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => {
+              setTesting(record);
+            }}
+          >
+            集成测试
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => {
+              setApiTesting(record);
+            }}
+          >
+            接口测试
           </Button>
           <Popconfirm
             title="确认删除该开放能力？"
@@ -170,6 +194,18 @@ export const OpenCapabilityPage: React.FC = () => {
           </Button>
         }
       >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="什么是开放能力管理？"
+          description={
+            <>
+              将平台智能体封装为标准化的开放能力，按分类组织管理，供外部系统通过开放接口（/open/v1，支持同步、流式、异步调用）集成使用。
+              新增或编辑能力可定义入参/出参契约、Prompt模板与执行模式；「集成测试」用于全流程调试能力执行效果，「接口测试」用于模拟外部调用方逐个接口对接验证。
+            </>
+          }
+        />
         <Space style={{ marginBottom: 16 }}>
           <Input
             placeholder="编码/名称/分类"
@@ -225,6 +261,22 @@ export const OpenCapabilityPage: React.FC = () => {
           editing ? updateMutation.mutate(spec) : createMutation.mutate(spec)
         }
         onRolledBack={() => queryClient.invalidateQueries({ queryKey: [QUERY_KEY] })}
+      />
+
+      <CapabilityTestDrawer
+        open={Boolean(testing)}
+        spec={testing}
+        onClose={() => {
+          setTesting(null);
+        }}
+      />
+
+      <OpenApiTestDrawer
+        open={Boolean(apiTesting)}
+        spec={apiTesting}
+        onClose={() => {
+          setApiTesting(null);
+        }}
       />
     </div>
   );

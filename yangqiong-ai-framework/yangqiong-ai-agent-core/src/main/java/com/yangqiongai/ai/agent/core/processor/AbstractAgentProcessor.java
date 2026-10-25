@@ -29,6 +29,7 @@ import com.yangqiongai.ai.agent.core.middleware.AgentTraceHook;
 import com.yangqiongai.ai.security.GuardrailsManager;
 import com.yangqiongai.ai.security.guardrails.GuardrailContext;
 import com.yangqiongai.ai.agent.core.context.AgentContext;
+import com.yangqiongai.ai.agent.core.task.StepRecordingManager;
 import com.yangqiongai.ai.agent.core.model.Agent;
 import com.yangqiongai.ai.agent.core.model.request.AgentRequest;
 import com.yangqiongai.ai.agent.core.model.result.AgentResult;
@@ -517,6 +518,22 @@ public abstract class AbstractAgentProcessor implements AgentProcessor {
     }
 
     /**
+     * 解析上下文窗口Token上限，从agentConfig读取，未配置或非正数返回0表示不启用截断
+     * @param request
+     * @return
+     */
+    protected int resolveMaxContextTokens(AgentRequest request) {
+        if (request == null) {
+            return 0;
+        }
+        Object val = request.getBody().get("_agentConfig_maxContextTokens");
+        if (val instanceof Number n) {
+            return Math.max(0, n.intValue());
+        }
+        return 0;
+    }
+
+    /**
      * 解析执行范式规格，请求级body.executionParadigm优先，其次agentConfig注入的内部键
      * <p>
      * 支持"reflexion"字符串简写与{"type":"reflexion","maxSteps":10}对象两种格式；
@@ -578,6 +595,7 @@ public abstract class AbstractAgentProcessor implements AgentProcessor {
      *   "systemPrompt": "你是一个预算审核专家",
      *   "maxIterations": 15,
      *   "temperature": 0.3,
+     *   "maxContextTokens": 32000,
      *   "executionParadigm": {"type": "reflexion", "maxSteps": 10, "maxReflections": 2},
      *   "tools": ["budget-query", "project-search"],
      *   "mcpServers": ["mcp-budget-tools"],
@@ -644,6 +662,11 @@ public abstract class AbstractAgentProcessor implements AgentProcessor {
             Object temperature = config.get("temperature");
             if (temperature instanceof Number n) {
                 body.putIfAbsent("_agentConfig_temperature", n.doubleValue());
+            }
+            // maxContextTokens（上下文窗口Token上限，注入到内部键由resolveMaxContextTokens读取）
+            Object maxContextTokens = config.get("maxContextTokens");
+            if (maxContextTokens instanceof Number n && n.intValue() > 0) {
+                body.putIfAbsent("_agentConfig_maxContextTokens", n.intValue());
             }
             // executionParadigm（执行范式默认值，注入到内部键由resolveExecutionParadigm读取，请求级显式传参优先）
             Object executionParadigm = config.get("executionParadigm");
@@ -1083,8 +1106,15 @@ public abstract class AbstractAgentProcessor implements AgentProcessor {
         // 模型调用瞬时故障（连接重置/429/5xx）指数退避重试，流式仅首片到达前重试避免重复输出
         builder.modelRetryConfig(AgentModelRetryConfig.defaultEnabled());
         builder.maxIters(resolveMaxIterations(request));
+        // 上下文窗口Token上限（>0时启用每轮LLM调用前的历史截断，0或不配置保持引擎默认不启用）
+        int maxContextTokens = resolveMaxContextTokens(request);
+        if (maxContextTokens > 0) {
+            builder.maxContextTokens(maxContextTokens);
+        }
         // 开启ask_user工具：模型缺信息时主动向用户提问，前端弹出澄清卡片提交答案后续跑
-        builder.askUserEnabled(true);
+        // 同步执行（工作流节点/同步API）无人工交互通道，澄清暂停无法续跑会导致节点以异常失败，
+        // 禁用后模型直接将待决策事项如实汇总到最终回复
+        builder.askUserEnabled(!StepRecordingManager.isSyncExecution(request));
         // 工具失败重试：引擎层细粒度重试仅针对只读工具（副作用工具跳过自动重试），
         // 幂等兜底由引擎默认装配的InMemoryToolExecutionStore承担，框架整轮重试已降为1次，避免叠加放大调用
         builder.toolFailureStrategy(HarnessAgentRuntimeBuilder.ToolFailureStrategy.RETRY)
@@ -1575,6 +1605,11 @@ public abstract class AbstractAgentProcessor implements AgentProcessor {
             }
             // 非内置工具白名单（agentConfig.tools与请求级覆盖合并后的清单，BUILTIN内置工具不受清单影响）
             Set<String> allowedTools = new LinkedHashSet<>(extractStringList(request.getBody().get("_agentConfig_tools")));
+            // 请求级工具禁用清单（开放能力关闭交互语义时排除审批等交互工具，优先级高于白名单）
+            List<String> deniedTools = extractStringList(request.getBody().get("_agentConfig_deniedTools"));
+            if (!deniedTools.isEmpty()) {
+                allowedTools.removeAll(deniedTools);
+            }
             AgentToolkit toolkit = toolkitProvider.assembleToolkit(agentCode, mcpConfigs, allowedTools);
             if (toolkit == null) {
                 return null;

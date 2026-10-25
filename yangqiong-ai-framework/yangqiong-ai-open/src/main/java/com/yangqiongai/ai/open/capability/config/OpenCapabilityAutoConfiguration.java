@@ -17,6 +17,10 @@
 package com.yangqiongai.ai.open.capability.config;
 
 import com.yangqiongai.ai.agent.core.AgentEngine;
+import com.yangqiongai.ai.agent.core.task.AgentTaskTracker;
+import com.yangqiongai.ai.approval.ApprovalGate;
+import com.yangqiongai.ai.approval.PendingRequestStore;
+import com.yangqiongai.ai.common.net.SafeUrlDownloader;
 import com.yangqiongai.ai.open.capability.catalog.CapabilityCatalog;
 import com.yangqiongai.ai.open.capability.catalog.CapabilityDefinition;
 import com.yangqiongai.ai.open.capability.catalog.CapabilityCategoryRepository;
@@ -32,6 +36,8 @@ import com.yangqiongai.ai.open.capability.guard.JsonSchemaValidator;
 import com.yangqiongai.ai.open.capability.guard.OutputRepairer;
 import com.yangqiongai.ai.open.capability.guard.OutputSchemaGuard;
 import com.yangqiongai.ai.open.capability.ingest.CapabilityDocumentIngestPort;
+import com.yangqiongai.ai.open.capability.interaction.OpenInteractionPolicy;
+import com.yangqiongai.ai.open.capability.interaction.OpenInteractionStorePostProcessor;
 import com.yangqiongai.ai.open.capability.template.PromptTemplateEngine;
 import com.yangqiongai.ai.open.capability.trace.CapabilityCallRepository;
 import com.yangqiongai.ai.open.capability.trace.RequestDeduplicator;
@@ -112,8 +118,30 @@ public class OpenCapabilityAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public CapabilityInvoker capabilityInvoker(AgentEngine agentEngine) {
-        return new CapabilityInvoker(agentEngine);
+    public SafeUrlDownloader safeUrlDownloader() {
+        OpenCapabilityProperties.FileUrlFetch fetch = properties.getFileUrlFetch();
+        return new SafeUrlDownloader(fetch.getMaxSizeMb() * 1024L * 1024L,
+                fetch.getConnectTimeoutMs(), fetch.getReadTimeoutMs(), fetch.getMaxRedirects(),
+                fetch.getAllowedInternalHosts());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CapabilityInvoker capabilityInvoker(AgentEngine agentEngine, OpenInteractionPolicy interactionPolicy) {
+        return new CapabilityInvoker(agentEngine, interactionPolicy);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public OpenInteractionPolicy openInteractionPolicy(AgentTaskTracker taskTracker,
+                                                       ObjectProvider<PendingRequestStore> pendingRequestStoreProvider,
+                                                       ObjectProvider<ApprovalGate> approvalGateProvider) {
+        return new OpenInteractionPolicy(taskTracker, pendingRequestStoreProvider, approvalGateProvider);
+    }
+
+    @Bean
+    public OpenInteractionStorePostProcessor openInteractionStorePostProcessor(OpenInteractionPolicy policy) {
+        return new OpenInteractionStorePostProcessor(policy);
     }
 
     @Bean
@@ -146,8 +174,9 @@ public class OpenCapabilityAutoConfiguration {
                                                                         CapabilityDefinitionRepository definitionRepository,
                                                                         CapabilityCategoryRepository categoryRepository,
                                                                         CapabilityCallRepository callRepository,
-                                                                        CapabilityDefinitionHistoryRepository historyRepository) {
+                                                                        CapabilityDefinitionHistoryRepository historyRepository,
+                                                                        CapabilityEngine engine) {
         return new OpenCapabilityAdminController(catalog, definitionRepository, categoryRepository, callRepository,
-                historyRepository);
+                historyRepository, engine);
     }
 }

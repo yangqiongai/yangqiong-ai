@@ -234,6 +234,59 @@ public class ConversationBridge {
      * @param result
      */
     public void persistSession(AgentContext context, AgentMessage result) {
+        doPersistSession(context, result, true);
+    }
+
+    /**
+     * 持久化恢复续跑的assistant输出（用户作答由恢复入口单独落库，避免原始请求输入重复写入）
+     * @param context
+     * @param result
+     */
+    public void persistResumeAssistantOutput(AgentContext context, AgentMessage result) {
+        doPersistSession(context, result, false);
+    }
+
+    /**
+     * 持久化恢复续跑的用户作答（澄清答案或审批决策），作为该轮对话的用户消息
+     * @param context
+     * @param answer
+     */
+    public void persistResumeUserAnswer(AgentContext context, String answer) {
+        if (context == null || context.getRequest() == null || answer == null || answer.isBlank()) {
+            return;
+        }
+        if (StringUtils.getOrDefault(context.getRequest().getSessionId()).isBlank()) {
+            return;
+        }
+        AgentSessionStore store = getSessionStore();
+        if (store == null) {
+            return;
+        }
+        String sessionId = resolveSessionId(context);
+        String userId = context.getRequest().getUserId();
+        bindRequestScope(context, () -> {
+            AgentMessageRecord userMemory = new AgentMessageRecord();
+            userMemory.setMessageId(generateMessageId());
+            userMemory.setSessionId(sessionId);
+            userMemory.setUserId(userId);
+            userMemory.setScopeId(StringUtils.getOrDefault(context.getRequest().getScopeId()));
+            userMemory.setMessageRole("user");
+            userMemory.setMessageContent(answer);
+            userMemory.setTokenCount(TokenEstimator.estimateTokens(answer));
+            userMemory.setCreateUser(userId);
+            userMemory.setCreateTime(LocalDateTime.now());
+            store.saveMessage(userMemory);
+            return null;
+        });
+    }
+
+    /**
+     * 会话持久化公共实现
+     * @param context
+     * @param result
+     * @param includeUserInput 是否同时持久化原始请求输入（恢复续跑轮传false防重复）
+     */
+    private void doPersistSession(AgentContext context, AgentMessage result, boolean includeUserInput) {
         if (!isEnabled(context)) {
             return;
         }
@@ -253,7 +306,9 @@ public class ConversationBridge {
                     ensureOrUpdateSession(context, result, store);
                 }
                 Object persistUserFlag = context.getAttributes().get(ATTR_SESSION_PERSIST_USER_INPUT);
-                if (persistUserFlag instanceof Boolean bool && !bool) {
+                if (!includeUserInput) {
+                    log.debug("恢复续跑跳过原始输入持久化: sessionId={}", sessionId);
+                } else if (persistUserFlag instanceof Boolean bool && !bool) {
                     log.debug("子代理跳过用户输入持久化: sessionId={}", sessionId);
                 } else {
                     persistUserInput(context, store);

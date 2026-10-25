@@ -868,43 +868,6 @@ CREATE TABLE IF NOT EXISTS `ai_chat_memory` (
   KEY `idx_user_id` (`user_id`),
   KEY `idx_scope_id` (`scope_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='对话记忆';
-CREATE TABLE IF NOT EXISTS `ai_connector_credential` (
-  `id` bigint(20) NOT NULL COMMENT '主键(雪花)',
-  `provider_code` varchar(32) NOT NULL COMMENT '提供商编码(dingtalk/wecom/feishu/database/docparser)',
-  `name` varchar(128) NOT NULL COMMENT '凭证名称',
-  `credential_json` text COMMENT 'AES加密后的凭证JSON',
-  `masked_json` text COMMENT '敏感字段尾号掩码(JSON: 字段名->掩码值)',
-  `status` varchar(16) NOT NULL DEFAULT 'ENABLED' COMMENT '状态(ENABLED/DISABLED)',
-  `scope_id` varchar(64) DEFAULT 'default' COMMENT 'scope隔离',
-  `create_user` varchar(64) DEFAULT NULL COMMENT '创建人',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_user` varchar(64) DEFAULT NULL COMMENT '更新人',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_scope_provider_name` (`scope_id`,`provider_code`,`name`),
-  KEY `idx_scope` (`scope_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='连接器凭证';
-CREATE TABLE IF NOT EXISTS `ai_connector_instance` (
-  `id` bigint(20) NOT NULL COMMENT '主键(雪花)',
-  `instance_code` varchar(64) NOT NULL COMMENT '实例编码(入站回调路由键)',
-  `provider_code` varchar(32) NOT NULL COMMENT '提供商编码',
-  `name` varchar(128) NOT NULL COMMENT '实例名称',
-  `config_json` text COMMENT '非敏感配置JSON(robotCode/agentCode绑定/数据库参数/解析参数等)',
-  `credential_id` bigint(20) DEFAULT NULL COMMENT '关联凭证ID(可空=免凭证提供商)',
-  `agent_code` varchar(64) DEFAULT NULL COMMENT '入站消息目标Agent编码(可空=仅出站工具)',
-  `status` varchar(16) NOT NULL DEFAULT 'ENABLED' COMMENT '状态(ENABLED/DISABLED)',
-  `version` int(11) NOT NULL DEFAULT '0' COMMENT '乐观锁版本号',
-  `scope_id` varchar(64) DEFAULT 'default' COMMENT 'scope隔离',
-  `create_user` varchar(64) DEFAULT NULL COMMENT '创建人',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_user` varchar(64) DEFAULT NULL COMMENT '更新人',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_scope_instance` (`scope_id`,`instance_code`),
-  KEY `idx_provider` (`provider_code`),
-  KEY `idx_credential` (`credential_id`),
-  KEY `idx_scope` (`scope_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='连接器实例';
 CREATE TABLE IF NOT EXISTS `ai_conversation_session` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
   `session_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '会话ID',
@@ -1101,23 +1064,6 @@ CREATE TABLE IF NOT EXISTS `ai_integration_channel_config` (
   KEY `idx_channel_type` (`channel_type`),
   KEY `idx_scope` (`scope_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='集成渠道配置';
-CREATE TABLE IF NOT EXISTS `ai_integration_record` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `message_id` varchar(64) NOT NULL COMMENT '消息ID',
-  `channel` varchar(16) NOT NULL COMMENT '渠道',
-  `status` varchar(16) NOT NULL COMMENT '发送状态(SUCCESS/FAILED)',
-  `response` text COMMENT '响应内容',
-  `send_time` datetime DEFAULT NULL COMMENT '发送时间',
-  `scope_id` varchar(64) DEFAULT 'default' COMMENT '租户隔离',
-  `create_user` varchar(64) DEFAULT NULL COMMENT '创建人',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_user` varchar(64) DEFAULT NULL COMMENT '更新人',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  `payload` text COMMENT '外发载荷(JSON,用于手工重推)',
-  PRIMARY KEY (`id`),
-  KEY `idx_message_id` (`message_id`),
-  KEY `idx_scope` (`scope_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='集成发送记录';
 CREATE TABLE IF NOT EXISTS `ai_kb_document` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
   `doc_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '文档ID',
@@ -1354,26 +1300,6 @@ CREATE TABLE IF NOT EXISTS `ai_open_capability_history` (
   KEY `idx_capability_code` (`capability_code`),
   KEY `idx_scope_id` (`scope_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='开放能力-能力定义版本历史';
-CREATE TABLE IF NOT EXISTS `ai_open_credential` (
-  `id` bigint(20) NOT NULL COMMENT '主键ID（雪花算法）',
-  `scope_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'default' COMMENT '作用域ID',
-  `credential_code` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '凭证编码，全局唯一',
-  `name` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '凭证名称',
-  `secret_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '密钥哈希（SHA-256(credential_code:secret)），明文不落库',
-  `status` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE启用/DISABLED禁用/REVOKED吊销',
-  `ip_whitelist` varchar(512) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'IP白名单（逗号分隔，企业版生效）',
-  `rate_limit_qps` int(11) DEFAULT NULL COMMENT '每秒限流阈值（空为不限流）',
-  `daily_quota` int(11) DEFAULT NULL COMMENT '每日配额（企业版生效）',
-  `expires_time` datetime DEFAULT NULL COMMENT '过期时间（空为永不过期）',
-  `last_used_time` datetime DEFAULT NULL COMMENT '最近使用时间',
-  `create_user` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_user` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '更新人',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_credential_code` (`credential_code`),
-  KEY `idx_scope_status` (`scope_id`,`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='开放凭证';
 CREATE TABLE IF NOT EXISTS `ai_open_data_context` (
   `id` bigint(20) NOT NULL COMMENT '主键',
   `ref` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '引用编码',
@@ -2054,7 +1980,6 @@ INSERT INTO `ai_system_menu` VALUES (1225,'default','community-admin','a2a-card'
 INSERT INTO `ai_system_menu` VALUES (1226,'default','community-admin','agent-memory',1108,'PAGE','记忆条目','/agent-memory','DatabaseOutlined',10,1,1,NULL,NULL,0,NULL,'2026-09-15 00:01:36',NULL,'2026-09-25 17:11:08');
 INSERT INTO `ai_system_menu` VALUES (1227,'default','community-admin','triggers',1108,'PAGE','触发规则','/triggers','ThunderboltOutlined',11,1,1,NULL,'ai.governance.enterprise',0,NULL,'2026-09-15 00:01:36',NULL,'2026-10-05 17:13:13');
 INSERT INTO `ai_system_menu` VALUES (1228,'default','community-admin','open-capabilities',1109,'PAGE','开放能力','/open-capabilities','GlobalOutlined',1,1,1,NULL,NULL,0,NULL,'2026-09-15 00:01:36',NULL,'2026-09-15 00:01:36');
-INSERT INTO `ai_system_menu` VALUES (1232,'default','community-admin','connectors',1109,'PAGE','连接器','/connectors','ApiOutlined',5,1,1,NULL,NULL,0,NULL,'2026-09-15 00:01:36',NULL,'2026-09-15 00:01:36');
 INSERT INTO `ai_system_menu` VALUES (1233,'default','community-admin','users',1110,'PAGE','用户管理','/users','UserOutlined',1,1,1,NULL,NULL,0,NULL,'2026-09-15 00:01:36',NULL,'2026-09-15 00:01:36');
 INSERT INTO `ai_system_menu` VALUES (1234,'default','community-admin','menus',1110,'PAGE','菜单管理','/menus','ProfileOutlined',2,1,1,NULL,NULL,0,NULL,'2026-09-15 00:01:36',NULL,'2026-09-15 00:01:36');
 INSERT INTO `ai_system_menu` VALUES (1290,'default','community-admin','workbench',1102,'PAGE','本地工作台','/workbench','FolderOpenOutlined',3,1,1,NULL,NULL,0,NULL,'2026-09-21 03:37:28',NULL,'2026-09-25 17:33:51');
@@ -2118,5 +2043,17 @@ INSERT INTO `ai_mcp_server_config` VALUES (2,'open-websearch','多引擎免费�
 
 -- 演示：最简可运行工作流（开始→智能体→结束）
 INSERT INTO `ai_workflow_definition` VALUES (209930600300000001,'demo_simple_qa','演示·智能问答流程','最简演示流程：开始节点注入初始问题，由默认对话智能体作答后结束，可直接一键运行体验工作流执行链路','CUSTOM',1,'{"name":"demo_simple_qa","description":"最简演示流程：开始→智能体→结束","nodes":[{"id":"start","name":"开始","type":"START","config":{"initialPrompt":"用两句话介绍智能体平台能帮助用户做什么"},"position":{"x":400,"y":60}},{"id":"agent1","name":"智能体","type":"AGENT","config":{"agentCode":"default"},"position":{"x":400,"y":200}},{"id":"end","name":"结束","type":"END","position":{"x":400,"y":340}}],"edges":[{"id":"e1","sourceId":"start","targetId":"agent1","type":"NORMAL"},{"id":"e2","sourceId":"agent1","targetId":"end","type":"NORMAL"}],"stateConfig":{"persistEnabled":true,"ttlHours":48},"errorStrategy":"STOP","maxRetries":0,"nodeTimeoutSeconds":120}',1,NULL,'default','system','2026-09-14 09:30:00','system','2026-09-14 09:30:00');
+
+-- 演示：开放能力（绑定文案策划智能体，输入产品与受众生成结构化营销文案）
+INSERT INTO `ai_open_capability` VALUES (209930600400000001,'marketing-copy','营销文案生成','基于文案策划智能体，输入产品主题与目标受众，生成结构化营销文案（标题、正文、话题标签）','{"code":"marketing-copy","name":"营销文案生成","description":"基于文案策划智能体，输入产品主题与目标受众，生成结构化营销文案（标题、正文、话题标签）","version":"1.0.0","agentCode":"copywriter","execType":"AGENT","execution":{"mode":"sync","timeout":"120s","retry":{"maxAttempts":1,"backoffMillis":500}},"contract":{"strict":true,"autoRepair":true,"maxRepairAttempts":2,"forceStructured":true},"audit":{"enabled":true,"logInput":true,"logOutput":true}}','{"type":"object","properties":{"product":{"type":"string","description":"产品名称或推广主题"},"audience":{"type":"string","description":"目标受众"},"style":{"type":"string","enum":["活泼种草","专业稳重","走心故事"],"description":"文案风格，未提供时自行选择"}},"required":["product","audience"]}','{"type":"object","properties":{"title":{"type":"string","description":"文案标题"},"body":{"type":"string","description":"文案正文"},"hashtags":{"type":"array","items":{"type":"string"},"description":"推荐话题标签"}},"required":["title","body"]}','你是营销文案策划助手。请根据以下信息创作一条营销文案：
+
+- 产品/主题：${product}
+- 目标受众：${audience}
+- 文案风格：${style}
+
+要求：
+1. 标题吸睛，紧扣产品核心卖点；
+2. 正文结构清晰，突出受众关心的价值点，结尾附明确的行动号召；
+3. 直接输出JSON对象本身，结构为 {"title":"标题","body":"正文","hashtags":["标签1","标签2"]}，禁止输出任何解释说明、前缀后缀或markdown代码块围栏。',1,'default','system','2026-09-14 09:30:00',NULL,NULL);
 
 SET FOREIGN_KEY_CHECKS = 1;

@@ -196,6 +196,8 @@ export type WorkspaceDirectoryItem = {
 export const createWorkspaceApi = (http: HttpRequest) => ({
   list: (userId: string) =>
     http.get<WorkspaceItem[] | WorkspaceListEnvelope>('/api/workspace', { params: { userId } }),
+  /** 推荐的默认工作区目录（一键创建默认目录预填用） */
+  defaultPath: () => http.get<string>('/api/workspace/default-path'),
   browseDirs: (path?: string) =>
     http.get<WorkspaceDirectoryItem[]>('/api/workspace/browse-dirs', { params: { path } }),
   create: (data: WorkspaceSaveParams) => http.post<WorkspaceItem>('/api/workspace', data),

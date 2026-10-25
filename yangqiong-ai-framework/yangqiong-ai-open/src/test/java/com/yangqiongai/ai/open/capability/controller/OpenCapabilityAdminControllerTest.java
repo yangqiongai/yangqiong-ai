@@ -72,12 +72,30 @@ class OpenCapabilityAdminControllerTest {
     @Mock
     private CapabilityDefinitionHistoryRepository historyRepository;
 
+    @Mock
+    private com.yangqiongai.ai.open.capability.engine.CapabilityEngine capabilityEngine;
+
     private OpenCapabilityAdminController controller;
 
     @BeforeEach
     void setUp() {
         controller = new OpenCapabilityAdminController(catalog, definitionRepository, categoryRepository,
-                callRepository, historyRepository);
+                callRepository, historyRepository, capabilityEngine);
+    }
+
+    @Test
+    @DisplayName("调试执行：透传引擎并携带调试调用方标识")
+    void debugInvokesEngine() {
+        com.yangqiongai.ai.open.capability.engine.CapabilityDebugResponse debug =
+                new com.yangqiongai.ai.open.capability.engine.CapabilityDebugResponse();
+        debug.setSuccess(true);
+        when(capabilityEngine.debugInvoke(any())).thenReturn(debug);
+
+        var result = controller.debug("a-cap", Map.of("question", "你好")).getData();
+
+        assertThat(result.isSuccess()).isTrue();
+        verify(capabilityEngine).debugInvoke(argThat(req ->
+                "a-cap".equals(req.getCapability()) && "admin-debug".equals(req.getCaller())));
     }
 
     @Test

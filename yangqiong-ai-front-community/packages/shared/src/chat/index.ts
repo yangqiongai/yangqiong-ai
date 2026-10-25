@@ -19,5 +19,6 @@ export * from './agent-chat-utils';
 export * from './workbench-file';
 export * from './use-agent-chat';
 export * from './use-approval-requests';
+export * from './pending-sync';
 export * from './use-image-paste';
 export * from './image-preview-strip';

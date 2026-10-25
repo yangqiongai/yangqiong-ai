@@ -20,8 +20,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Card, Drawer, Space, Spin, Tag, Tooltip, Typography } from 'antd';
 import { ArrowLeftOutlined, ClockCircleOutlined, RobotOutlined } from '@ant-design/icons';
 import { EnterpriseLockIcon } from '@yangqiong/shared';
-import { formatDuration } from '@yangqiong/shared/workflow';
+import { formatDuration, localAgentPreset } from '@yangqiong/shared/workflow';
+import { normalizeWorkspaceList } from '@yangqiong/shared/services';
 import { api } from '@/services';
+import { useAuthStore } from '@/store/auth-store';
 import { WorkflowEditorBridge } from '@/components/workflow/WorkflowEditorBridge';
 import { WorkflowDesignPanel } from './WorkflowDesignPanel';
 import type {
@@ -126,6 +128,8 @@ interface NodeSummaryLike {
 export const WorkflowEditPage: React.FC = () => {
   const { name } = useParams<{ name: string }>();
   const [searchParams] = useSearchParams();
+  // 当前登录用户：工作流执行时透传，工作区节点按此校验归属并注册文件工具
+  const loginUserId = useAuthStore((s) => s.user?.id);
   // 列表页带入的显示名（中文名称），未携带时回退为定义编码
   const displayName = searchParams.get('displayName') ?? '';
 
@@ -199,6 +203,26 @@ export const WorkflowEditPage: React.FC = () => {
     [channelPage],
   );
 
+  // 工作区下拉选项（仅服务端存储型），供本地节点配置选择
+  const user = useAuthStore((s) => s.user);
+  const { data: workspaceData } = useQuery({
+    queryKey: ['workflow-workspace-options', user?.id],
+    queryFn: () => api.workspace.list(user!.id).then(normalizeWorkspaceList),
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const workspaceOptions = useMemo(
+    () =>
+      (workspaceData?.workspaces ?? [])
+        .filter((ws) => !ws.type || ws.type === 'SERVER')
+        .map((ws) => ({ id: ws.id, name: ws.name })),
+    [workspaceData],
+  );
+
+  // Agent 节点预设模板（本地节点，双端可用），供画布定制Agent节点配置
+  const agentPresets = useMemo(() => [localAgentPreset], []);
+
   // 后端运行时定义适配编辑器入参（nodes/edges 必填兜底）
   const initialDefinition = useMemo<EditorWorkflowDefinition | undefined>(() => {
     if (!data) return undefined;
@@ -215,7 +239,7 @@ export const WorkflowEditPage: React.FC = () => {
   const editorDefinition = appliedDefinition ?? initialDefinition;
 
   const saveMutation = useMutation({
-    mutationFn: async (definition: EditorWorkflowDefinition) => {
+    mutationFn: async ({ definition, asNewVersion }: { definition: EditorWorkflowDefinition; asNewVersion?: boolean }) => {
       // 保存前先走后端校验，与前端校验形成双保险
       const validateResult = await api.workflow.validateWorkflowDefinition(
         definition as unknown as Record<string, unknown>,
@@ -225,10 +249,11 @@ export const WorkflowEditPage: React.FC = () => {
       }
       return api.workflow.definition.update(name as string, {
         definition: definition as unknown as Record<string, unknown>,
+        asNewVersion,
       });
     },
-    onSuccess: () => {
-      message.success('保存成功');
+    onSuccess: (_result, variables) => {
+      message.success(variables.asNewVersion ? '已另存为新版本' : '保存成功');
       queryClient.invalidateQueries({ queryKey: ['workflow-definition-list'] });
       queryClient.invalidateQueries({ queryKey: ['workflow-definition', name] });
     },
@@ -331,7 +356,11 @@ export const WorkflowEditPage: React.FC = () => {
     const hide = message.loading('正在执行工作流，可在画布查看执行进度…', 0);
     try {
       await api.workflow.executeStream(
-        { definition: definition as unknown as Record<string, unknown> },
+        {
+          definition: definition as unknown as Record<string, unknown>,
+          // 执行用户：LocalAgentProcessor按userId校验工作区归属，缺失时工作区工具不注册
+          userId: loginUserId,
+        },
         (eventType, event) => {
           const nodeId = event.nodeId;
           if (eventType === 'WORKFLOW_STARTED' && event.instanceId) {
@@ -540,14 +569,17 @@ export const WorkflowEditPage: React.FC = () => {
               displayName={resolvedDisplayName}
               enterpriseFeatures={isEnterprise}
               agentOptions={agentOptions}
+              agentPresets={agentPresets}
               channelOptions={channelOptions}
+              workspaceOptions={workspaceOptions}
               registerApi={(api) => {
                 execApiRef.current = api;
               }}
               onUpdate={(value) => {
                 latestDefinitionRef.current = value;
               }}
-              onSave={(value) => saveMutation.mutate(value)}
+              onSave={(value) => saveMutation.mutate({ definition: value })}
+              onSaveAsVersion={(value) => saveMutation.mutate({ definition: value, asNewVersion: true })}
               onExecute={() => handleExecute()}
               onPause={() => void handlePause()}
               onResume={() => void handleResume()}

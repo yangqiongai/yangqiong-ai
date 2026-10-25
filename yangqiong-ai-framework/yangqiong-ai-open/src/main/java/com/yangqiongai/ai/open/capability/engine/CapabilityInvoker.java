@@ -17,16 +17,25 @@
 package com.yangqiongai.ai.open.capability.engine;
 
 import com.yangqiongai.ai.agent.core.AgentEngine;
+import com.yangqiongai.ai.agent.core.model.content.Base64InputSource;
+import com.yangqiongai.ai.agent.core.model.content.ImageInputBlock;
+import com.yangqiongai.ai.agent.core.model.content.InputBlock;
+import com.yangqiongai.ai.agent.core.model.content.TextInputBlock;
+import com.yangqiongai.ai.agent.core.model.content.UrlInputSource;
 import com.yangqiongai.ai.agent.core.model.request.AgentRequest;
 import com.yangqiongai.ai.agent.core.model.result.AgentResult;
+import com.yangqiongai.ai.open.capability.interaction.OpenInteractionPolicy;
 import com.yangqiongai.ai.open.capability.spec.AgentOverrides;
 import com.yangqiongai.ai.open.capability.spec.CapabilitySpec;
+import com.yangqiongai.ai.common.scope.ScopeContext;
 import com.yangqiongai.ai.common.sse.StreamEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -44,10 +53,35 @@ public class CapabilityInvoker {
 
     private static final Logger log = LoggerFactory.getLogger(CapabilityInvoker.class);
 
+    /**
+     * arguments中图片Base64数据的约定键名
+     */
+    public static final String ARG_IMAGE_BASE64 = "imageBase64";
+
+    /**
+     * arguments中图片媒体类型的约定键名（缺省image/jpeg）
+     */
+    public static final String ARG_IMAGE_MEDIA_TYPE = "imageMediaType";
+
+    /**
+     * arguments中图片URL的约定键名
+     */
+    public static final String ARG_IMAGE_URL = "imageUrl";
+
     private final AgentEngine agentEngine;
 
+    /**
+     * 交互策略（可选，关闭交互语义处理，未注入时保持原有透传行为）
+     */
+    private final OpenInteractionPolicy interactionPolicy;
+
     public CapabilityInvoker(AgentEngine agentEngine) {
+        this(agentEngine, null);
+    }
+
+    public CapabilityInvoker(AgentEngine agentEngine, OpenInteractionPolicy interactionPolicy) {
         this.agentEngine = agentEngine;
+        this.interactionPolicy = interactionPolicy;
     }
 
     /**
@@ -75,11 +109,29 @@ public class CapabilityInvoker {
         if (isWorkflowExecutor(spec)) {
             return AgentResult.failure("工作流执行体为企业版能力，社区版不支持调用: " + spec.getCode());
         }
+        boolean closedInteraction = isClosedInteraction(spec);
         AgentRequest agentRequest = buildAgentRequest(spec, prompt, request);
         if (timeoutSeconds > 0) {
             agentRequest.getBody().put("_timeout", timeoutSeconds);
         }
-        return agentEngine.run(agentRequest);
+        if (closedInteraction) {
+            interactionPolicy.registerInvocation(agentRequest.getSessionId(), null);
+        } else if (interactionPolicy != null && interactionPolicy.isInteractionEnabled(spec)) {
+            // 开启交互：登记调用上下文，供交互增强联动挂起登记（作用域以凭证绑定上下文为准）
+            interactionPolicy.registerOpenInvocation(agentRequest.getSessionId(), null, ScopeContext.getScopeId());
+        }
+        try {
+            AgentResult result = agentEngine.run(agentRequest);
+            // 关闭交互兜底：同步调用中模型仍发起澄清时，转换为失败结果并给出明确文案
+            if (closedInteraction && interactionPolicy.isSuspended(agentRequest.getSessionId())) {
+                return AgentResult.failure(OpenInteractionPolicy.CLOSED_INTERACTION_MESSAGE);
+            }
+            return result;
+        } finally {
+            if (closedInteraction) {
+                interactionPolicy.unregister(agentRequest.getSessionId());
+            }
+        }
     }
 
     /**
@@ -94,8 +146,20 @@ public class CapabilityInvoker {
             return Flux.error(new UnsupportedOperationException(
                     "工作流执行体为企业版能力，社区版不支持流式调用: " + spec.getCode()));
         }
+        boolean closedInteraction = isClosedInteraction(spec);
         AgentRequest agentRequest = buildAgentRequest(spec, prompt, request);
-        return agentEngine.stream(agentRequest);
+        Flux<StreamEvent> flux = agentEngine.stream(agentRequest);
+        if (closedInteraction) {
+            String sessionId = agentRequest.getSessionId();
+            interactionPolicy.registerInvocation(sessionId, null);
+            // 关闭交互兜底：澄清/确认事件不透传，流截断后自然结束
+            flux = interactionPolicy.filterSuspendEvents(flux)
+                    .doFinally(signal -> interactionPolicy.unregister(sessionId));
+        } else if (interactionPolicy != null && interactionPolicy.isInteractionEnabled(spec)) {
+            // 开启交互：登记调用上下文，供交互增强联动挂起登记（作用域以凭证绑定上下文为准）
+            interactionPolicy.registerOpenInvocation(agentRequest.getSessionId(), null, ScopeContext.getScopeId());
+        }
+        return flux;
     }
 
     /**
@@ -111,7 +175,23 @@ public class CapabilityInvoker {
                     "工作流执行体为企业版能力，社区版不支持异步调用: " + spec.getCode());
         }
         AgentRequest agentRequest = buildAgentRequest(spec, prompt, request);
-        return agentEngine.submitTask(agentRequest);
+        String taskId = agentEngine.submitTask(agentRequest);
+        if (isClosedInteraction(spec)) {
+            interactionPolicy.registerInvocation(agentRequest.getSessionId(), taskId);
+        } else if (interactionPolicy != null && interactionPolicy.isInteractionEnabled(spec)) {
+            // 开启交互：登记调用上下文，供交互增强联动挂起登记（作用域以凭证绑定上下文为准）
+            interactionPolicy.registerOpenInvocation(agentRequest.getSessionId(), taskId, ScopeContext.getScopeId());
+        }
+        return taskId;
+    }
+
+    /**
+     * 判断能力是否关闭交互（策略未注入时不拦截，保持原有透传行为）
+     * @param spec 能力规格
+     * @return
+     */
+    private boolean isClosedInteraction(CapabilitySpec spec) {
+        return interactionPolicy != null && !interactionPolicy.isInteractionEnabled(spec);
     }
 
     /**
@@ -136,15 +216,52 @@ public class CapabilityInvoker {
      * 构建AgentRequest（统一构建逻辑，避免重复）
      */
     private AgentRequest buildAgentRequest(CapabilitySpec spec, String prompt, CapabilityRequest request) {
+        boolean closedInteraction = isClosedInteraction(spec);
+        // 关闭交互时追加Prompt约束段，降低模型发起澄清的概率（非100%由兜底层保证不外发）
+        if (closedInteraction) {
+            String constraint = interactionPolicy.buildClosedConstraint();
+            prompt = prompt == null || prompt.isBlank() ? constraint : prompt + constraint;
+        }
         AgentRequest agentRequest = new AgentRequest()
                 .agentCode(spec.getAgentCode())
-                .input(prompt)
+                .input(buildInputBlocks(prompt, request))
                 .userId(request.getCaller())
-                .scopeId(request.getScopeId())
+                .scopeId(ScopeContext.getScopeId())
                 .sessionId(generateSessionId(request));
         // 注入Agent参数覆盖配置
         applyAgentOverrides(agentRequest, spec.getAgentOverrides());
+        // 关闭交互时源头排除审批工具（LLM不可见审批工具即不会发起审批）
+        if (closedInteraction) {
+            interactionPolicy.applyClosedMode(agentRequest);
+        }
         return agentRequest;
+    }
+
+    /**
+     * 构建多模态输入块：arguments携带imageUrl/imageBase64时以图片块随Prompt文本透传给Agent，
+     * 图片数据不参与Prompt模板渲染，避免兆级Base64进入文本
+     * @param prompt 渲染后的Prompt
+     * @param request 原始请求
+     * @return
+     */
+    private List<InputBlock> buildInputBlocks(String prompt, CapabilityRequest request) {
+        List<InputBlock> blocks = new ArrayList<>();
+        if (prompt != null && !prompt.isBlank()) {
+            blocks.add(new TextInputBlock(prompt));
+        }
+        Map<String, Object> arguments = request == null ? null : request.getArguments();
+        if (arguments == null) {
+            return blocks;
+        }
+        if (arguments.get(ARG_IMAGE_URL) instanceof String url && !url.isBlank()) {
+            blocks.add(new ImageInputBlock(new UrlInputSource(url), null, null));
+        }
+        if (arguments.get(ARG_IMAGE_BASE64) instanceof String base64 && !base64.isBlank()) {
+            String mediaType = arguments.get(ARG_IMAGE_MEDIA_TYPE) instanceof String mt && !mt.isBlank()
+                    ? mt : "image/jpeg";
+            blocks.add(new ImageInputBlock(new Base64InputSource(mediaType, base64), null, null));
+        }
+        return blocks;
     }
 
     /**

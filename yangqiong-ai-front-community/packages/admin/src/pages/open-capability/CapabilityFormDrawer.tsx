@@ -79,6 +79,7 @@ export interface CapabilityFormValues {
   auditEnabled?: boolean;
   auditLogInput?: boolean;
   auditLogOutput?: boolean;
+  interactionEnabled?: boolean;
 }
 
 interface AgentOverridesLike {
@@ -363,6 +364,7 @@ export const CapabilityFormDrawer: React.FC<CapabilityFormDrawerProps> = ({
         auditEnabled: true,
         auditLogInput: true,
         auditLogOutput: true,
+        interactionEnabled: false,
       };
     }
     const ov = (editing.agentOverrides ?? {}) as AgentOverridesLike;
@@ -407,6 +409,7 @@ export const CapabilityFormDrawer: React.FC<CapabilityFormDrawerProps> = ({
       auditEnabled: (au.enabled as boolean) ?? true,
       auditLogInput: (au.logInput as boolean) ?? true,
       auditLogOutput: (au.logOutput as boolean) ?? true,
+      interactionEnabled: editing.interactionEnabled === true,
     };
   }, [editing]);
 
@@ -555,6 +558,7 @@ export const CapabilityFormDrawer: React.FC<CapabilityFormDrawerProps> = ({
         logInput: values.auditLogInput ?? true,
         logOutput: values.auditLogOutput ?? true,
       },
+      interactionEnabled: values.interactionEnabled ?? false,
     };
   };
 
@@ -832,6 +836,14 @@ export const CapabilityFormDrawer: React.FC<CapabilityFormDrawerProps> = ({
               <InputNumber min={1} style={{ width: 110 }} />
             </Form.Item>
           </Space>
+          <Form.Item
+            name="interactionEnabled"
+            label="交互功能"
+            valuePropName="checked"
+            extra="开启后外部调用方可在其系统中处理该能力的澄清提问与人工审批（挂起后经交互接口续跑）；关闭时不向外发送审批与澄清流，模型发起澄清即中止"
+          >
+            <Switch />
+          </Form.Item>
           <Space size="large" wrap>
             <Form.Item name="auditEnabled" label="审计记录" valuePropName="checked">
               <Switch />

@@ -103,6 +103,10 @@ public class CapabilityInputValidator {
      */
     @SuppressWarnings("unchecked")
     private void validateField(JsonNode def, Object value, String path, List<String> errors) {
+        // 空串视为未提供（调用方留空表示交给模型自行决定），跳过枚举与格式约束
+        if (value instanceof String text && text.isBlank()) {
+            return;
+        }
         String type = def.hasNonNull("type") ? def.get("type").asText() : null;
         if (!matchesType(type, value)) {
             errors.add(fieldMessage(def, path, "类型应为" + typeLabel(type)));

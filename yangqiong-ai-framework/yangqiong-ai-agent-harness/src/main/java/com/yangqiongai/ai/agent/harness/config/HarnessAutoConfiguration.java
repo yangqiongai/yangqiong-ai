@@ -95,6 +95,8 @@ public class HarnessAutoConfiguration {
      * @param retrievalTopK L3到L1检索注入条目上限
      * @param toolLoadingMode 工具下发模式：FULL全量下发 / PROGRESSIVE渐进加载
      * @param alwaysOnToolsCsv 渐进模式常驻工具名单（逗号分隔）
+     * @param maxContextTokens 上下文窗口Token上限（0=不启用截断）
+     * @param contextTruncationStrategy 历史截断策略：HEAD/TAIL/SUMMARY
      * @param traceEmitterProvider 追踪导出器（可选，多个时组合广播）
      * @param tokenBudgetPolicyProvider Token预算策略（可选，配额模块注入）
      * @param costBudgetPolicyProvider 成本预算策略（可选，配额模块注入）
@@ -115,6 +117,8 @@ public class HarnessAutoConfiguration {
                                                         @Value("${ai.agent.harness.memory.retrieval.top-k:3}") int retrievalTopK,
                                                         @Value("${ai.agent.tool-loading.mode:FULL}") String toolLoadingMode,
                                                         @Value("${ai.agent.tool-loading.always-on-tools:}") String alwaysOnToolsCsv,
+                                                        @Value("${ai.agent.harness.context.max-tokens:0}") int maxContextTokens,
+                                                        @Value("${ai.agent.harness.context.truncation-strategy:TAIL}") String contextTruncationStrategy,
                                                         ObjectProvider<com.yangqiongai.ai.agent.runtime.trace.TraceEmitter> traceEmitterProvider,
                                                         ObjectProvider<com.yangqiongai.ai.agent.runtime.budget.TokenBudgetPolicy> tokenBudgetPolicyProvider,
                                                         ObjectProvider<com.yangqiongai.ai.agent.runtime.budget.CostBudgetPolicy> costBudgetPolicyProvider,
@@ -149,6 +153,14 @@ public class HarnessAutoConfiguration {
         }
         factory.setToolLoadingMode(parseToolLoadingMode(toolLoadingMode));
         factory.setAlwaysOnTools(parseCsv(alwaysOnToolsCsv));
+        if (maxContextTokens > 0) {
+            factory.setMaxContextTokens(maxContextTokens);
+        }
+        com.yangqiongai.ai.agent.runtime.HarnessAgentRuntimeBuilder.TruncationStrategy truncationStrategy =
+                parseTruncationStrategy(contextTruncationStrategy);
+        if (truncationStrategy != null) {
+            factory.setHistoryTruncationStrategy(truncationStrategy);
+        }
         List<com.yangqiongai.ai.agent.runtime.trace.TraceEmitter> traceEmitters =
                 traceEmitterProvider.orderedStream().toList();
         if (traceEmitters.size() == 1) {
@@ -204,6 +216,24 @@ public class HarnessAutoConfiguration {
                     .valueOf(mode.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
             return com.yangqiongai.ai.agent.runtime.HarnessAgentRuntimeBuilder.ToolLoadingMode.FULL;
+        }
+    }
+
+    /**
+     * 解析历史截断策略配置，非法值返回null走引擎默认
+     * @param strategy 配置值
+     * @return
+     */
+    private com.yangqiongai.ai.agent.runtime.HarnessAgentRuntimeBuilder.TruncationStrategy parseTruncationStrategy(
+            String strategy) {
+        if (strategy == null || strategy.isBlank()) {
+            return null;
+        }
+        try {
+            return com.yangqiongai.ai.agent.runtime.HarnessAgentRuntimeBuilder.TruncationStrategy
+                    .valueOf(strategy.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return null;
         }
     }
 

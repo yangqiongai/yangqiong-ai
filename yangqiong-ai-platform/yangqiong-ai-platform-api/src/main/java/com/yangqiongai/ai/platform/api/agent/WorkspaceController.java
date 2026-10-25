@@ -132,6 +132,16 @@ public class WorkspaceController {
     }
 
     /**
+     * 查询推荐的默认工作区目录（一键创建默认目录预填用）
+     * @return
+     */
+    @Operation(summary = "查询默认工作区目录", description = "白名单非空时返回第一个存在的白名单根，否则返回用户主目录下的 yangqiong-workspace")
+    @GetMapping("/default-path")
+    public ApiResult<String> defaultPath() {
+        return ApiResult.ok(userWorkspaceService.defaultPath());
+    }
+
+    /**
      * 懒加载列目录
      * @param id
      * @param userId

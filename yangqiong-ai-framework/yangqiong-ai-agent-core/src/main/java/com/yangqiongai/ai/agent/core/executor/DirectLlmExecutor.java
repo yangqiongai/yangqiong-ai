@@ -183,7 +183,10 @@ public class DirectLlmExecutor {
         Duration timeout = Duration.ofSeconds(timeoutSeconds > 0 ? timeoutSeconds : DEFAULT_STREAM_TIMEOUT_SECONDS);
 
         long startTime = System.currentTimeMillis();
-        AgentChatResponse response = model.stream(messages, List.of(), options).blockLast(timeout);
+        List<AgentChatResponse> chunks = model.stream(messages, List.of(), options)
+                .collectList()
+                .block(timeout);
+        AgentChatResponse response = aggregateResponses(chunks);
         long latencyMs = System.currentTimeMillis() - startTime;
 
         if (response == null || response.getContent() == null) {
@@ -224,6 +227,42 @@ public class DirectLlmExecutor {
 
         AgentResultConverter resultConverter = context.getAttribute(AgentContext.CTX_RESULT_CONVERTER);
         return resultConverter.converter(context, answerBlocks, usage, assistantMsg);
+    }
+
+    /**
+     * 聚合流式分片为完整响应
+     * <p>
+     * 模型流逐chunk直通且末尾为usage-only尾块（stream_options.include_usage时choices为空），
+     * 直接取尾块会把完整回答误判为空响应，此处将全部文本块拼接、其余块保序收集、usage取最后一次。
+     * </p>
+     * @param chunks 流式分片列表
+     * @return
+     */
+    private AgentChatResponse aggregateResponses(List<AgentChatResponse> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return null;
+        }
+        List<AgentContentBlock> blocks = new ArrayList<>();
+        StringBuilder text = new StringBuilder();
+        AgentChatUsage usage = null;
+        for (AgentChatResponse chunk : chunks) {
+            if (chunk.getContent() != null) {
+                for (AgentContentBlock block : chunk.getContent()) {
+                    if (block instanceof AgentTextBlock tb && tb.getText() != null) {
+                        text.append(tb.getText());
+                    } else {
+                        blocks.add(block);
+                    }
+                }
+            }
+            if (chunk.getChatUsage() != null) {
+                usage = chunk.getChatUsage();
+            }
+        }
+        if (text.length() > 0) {
+            blocks.add(AgentTextBlock.builder().text(text.toString()).build());
+        }
+        return new AgentChatResponse(blocks, usage);
     }
 
     /**

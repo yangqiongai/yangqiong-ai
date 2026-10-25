@@ -22,7 +22,7 @@ spring:
     driverClassName: com.mysql.cj.jdbc.Driver
   data:
     redis:
-      # Redis 连接（工作流状态/会话缓存等），生产环境通过环境变量覆盖
+      # Redis 连接（工作流状态/会话缓存等），生产环境通过环境变量覆
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 

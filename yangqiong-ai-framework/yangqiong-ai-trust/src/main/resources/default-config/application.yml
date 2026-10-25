@@ -1,10 +1,6 @@
 ai:
   trust:
     enabled: true
-    credential:
-      # 凭证鉴权过滤器默认关闭,上线后开启
-      enabled: false
-      include-paths: /open/v1/**,/mcp/**,/a2a/**
     identity:
       # 身份凭证签名主密钥,生产环境必须外部化(至少32字节)
       master-key: ${AI_TRUST_IDENTITY_MASTER_KEY:}
